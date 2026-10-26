@@ -2,6 +2,8 @@
 
 **English** · [Español](README.es.md)
 
+[![npm](https://img.shields.io/npm/v/paperclip-plugin-board-global)](https://www.npmjs.com/package/paperclip-plugin-board-global) [![CI](https://github.com/jstm-co/paperclip-plugin-board-global/actions/workflows/ci.yml/badge.svg)](https://github.com/jstm-co/paperclip-plugin-board-global/actions/workflows/ci.yml)
+
 A [Paperclip](https://github.com/paperclipai/paperclip) plugin that brings every company in an instance together on two pages:
 
 - **Board global** (Global Board): the issues of every company and every project in one view, as a kanban or a list, with filters, saved views and swimlanes.
@@ -9,7 +11,7 @@ A [Paperclip](https://github.com/paperclipai/paperclip) plugin that brings every
 
 Both pages show up in the sidebar of every company. **The interface is in Spanish**; this README quotes the on-screen labels in Spanish, with a translation the first time they appear.
 
-- Plugin key: `jstm.board-global` · npm package: `paperclip-plugin-board-global` · version `0.6.1`
+- Plugin key: `jstm.board-global` · npm package: `paperclip-plugin-board-global`
 - Routes: `/<PREFIX>/board-global` and `/<PREFIX>/dashboard-global`, where `<PREFIX>` is the prefix of any company (e.g. `/ACM/board-global`).
 - Tested with Paperclip `2026.824.1`.
 
@@ -221,7 +223,13 @@ The host limits each worker call to a single company. That is why the UI lists t
 
 ## Contributing
 
-Bug reports and improvements are welcome as [issues](https://github.com/jstm-co/paperclip-plugin-board-global/issues) or pull requests. Before sending a change, run `npm test` and `npm run typecheck`.
+Bug reports and improvements are welcome as [issues](https://github.com/jstm-co/paperclip-plugin-board-global/issues) or pull requests. How it works:
+
+1. Open a pull request against `main`. The CI runs the typecheck, the tests and the build.
+2. If your change touches the plugin (anything other than docs, tests or CI), bump the version in the same pull request with `npm version patch --no-git-tag-version` (or `minor` / `major`). The `version` check tells you whether merging will publish.
+3. When a maintainer merges it, GitHub Actions publishes the new version to npm with provenance and creates its tag and release.
+
+Details in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

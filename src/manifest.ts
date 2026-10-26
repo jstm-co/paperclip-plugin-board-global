@@ -4,7 +4,7 @@ import { DASHBOARD_ROUTE, PAGE_ROUTE } from "./shared.js";
 const manifest: PaperclipPluginManifestV1 = {
   id: "jstm.board-global",
   apiVersion: 1,
-  version: "0.6.1",
+  version: "0.6.2",
   displayName: "Board global",
   description: "Tareas y Dashboard de todas las empresas de la instancia en una sola vista (kanban, lista y comparativa).",
   author: "JSTM",
