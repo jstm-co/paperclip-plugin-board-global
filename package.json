@@ -1,0 +1,55 @@
+{
+  "name": "paperclip-plugin-board-global",
+  "version": "0.6.1",
+  "type": "module",
+  "description": "Board global y Dashboard global para Paperclip: las tareas y el Dashboard de todas las empresas de la instancia en una sola vista",
+  "homepage": "https://github.com/jstm-co/paperclip-plugin-board-global#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jstm-co/paperclip-plugin-board-global.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jstm-co/paperclip-plugin-board-global/issues"
+  },
+  "scripts": {
+    "build": "node ./esbuild.config.mjs",
+    "dev": "node ./esbuild.config.mjs --watch",
+    "test": "vitest run --config ./vitest.config.ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "paperclipPlugin": {
+    "manifest": "./dist/manifest.js",
+    "worker": "./dist/worker.js",
+    "ui": "./dist/ui/"
+  },
+  "keywords": [
+    "paperclip",
+    "paperclip-plugin",
+    "kanban",
+    "dashboard",
+    "multi-company"
+  ],
+  "author": "JSTM",
+  "license": "MIT",
+  "devDependencies": {
+    "@paperclipai/plugin-sdk": "2026.824.1",
+    "@types/node": "^22.20.1",
+    "@types/react": "^19.2.17",
+    "esbuild": "^0.27.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.es.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}
