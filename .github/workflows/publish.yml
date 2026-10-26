@@ -1,0 +1,69 @@
+# Publishes to npm when a pull request is merged into main with a new version.
+# Uses npm trusted publishing (OIDC): no npm token is stored in the repository.
+# The trusted publisher on npm points to this file (publish.yml) and the `npm`
+# environment, which only accepts runs from main.
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # retry from the Actions tab if a publish failed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish to npm
+    if: github.ref == 'refs/heads/main' && github.repository == 'jstm-co/paperclip-plugin-board-global'
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/paperclip-plugin-board-global
+    permissions:
+      contents: write # tag and GitHub release
+      id-token: write # npm trusted publishing
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Is this version on npm yet?
+        id: decide
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: node scripts/release.mjs main
+
+      - name: npm 11.5.1 or later (trusted publishing)
+        if: steps.decide.outputs.publish == 'true'
+        run: npm install -g npm@11 && npm --version
+      - if: steps.decide.outputs.publish == 'true'
+        run: npm ci
+      - if: steps.decide.outputs.publish == 'true'
+        run: npm run typecheck
+      - if: steps.decide.outputs.publish == 'true'
+        run: npm test
+      - if: steps.decide.outputs.publish == 'true'
+        run: npm run build
+      - name: Publish to npm
+        if: steps.decide.outputs.publish == 'true'
+        run: npm publish --provenance --access public --ignore-scripts
+
+      - name: Tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.decide.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "v$VERSION is already released"
+            exit 0
+          fi
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "$VERSION" --generate-notes
+          echo "🏷️ [v$VERSION](https://github.com/$GITHUB_REPOSITORY/releases/tag/v$VERSION)" >> "$GITHUB_STEP_SUMMARY"

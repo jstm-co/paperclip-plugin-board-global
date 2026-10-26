@@ -2,6 +2,8 @@
 
 [English](README.md) · **Español**
 
+[![npm](https://img.shields.io/npm/v/paperclip-plugin-board-global)](https://www.npmjs.com/package/paperclip-plugin-board-global) [![CI](https://github.com/jstm-co/paperclip-plugin-board-global/actions/workflows/ci.yml/badge.svg)](https://github.com/jstm-co/paperclip-plugin-board-global/actions/workflows/ci.yml)
+
 Plugin para [Paperclip](https://github.com/paperclipai/paperclip) que junta todas las empresas de una instancia en dos páginas:
 
 - **Board global:** las tareas de todas las empresas y de todos sus proyectos en una sola vista, en kanban o en lista, con filtros, vistas guardadas y carriles.
@@ -9,7 +11,7 @@ Plugin para [Paperclip](https://github.com/paperclipai/paperclip) que junta toda
 
 Las dos aparecen en el menú lateral de cada empresa. La interfaz está en español.
 
-- Clave del plugin: `jstm.board-global` · paquete npm: `paperclip-plugin-board-global` · versión `0.6.1`
+- Clave del plugin: `jstm.board-global` · paquete npm: `paperclip-plugin-board-global`
 - Rutas: `/<PREFIJO>/board-global` y `/<PREFIJO>/dashboard-global`, donde `<PREFIJO>` es el de cualquier empresa (p. ej. `/ACM/board-global`).
 - Probado con Paperclip `2026.824.1`.
 
@@ -221,7 +223,13 @@ El host limita cada llamada al worker a una sola empresa. Por eso la UI lista la
 
 ## Contribuir
 
-Los reportes de errores y las mejoras son bienvenidos en [Issues](https://github.com/jstm-co/paperclip-plugin-board-global/issues) o como pull request. Antes de enviar un cambio, corre `npm test` y `npm run typecheck`.
+Los reportes de errores y las mejoras son bienvenidos en [Issues](https://github.com/jstm-co/paperclip-plugin-board-global/issues) o como pull request. Así funciona:
+
+1. Abre un pull request contra `main`. El CI corre el typecheck, las pruebas y el build.
+2. Si tu cambio toca el plugin (cualquier cosa que no sea documentación, pruebas o CI), sube la versión en el mismo pull request con `npm version patch --no-git-tag-version` (o `minor` / `major`). El check `version` te dice si el merge va a publicar.
+3. Cuando alguien del equipo hace merge, GitHub Actions publica la versión nueva en npm con procedencia (provenance) y crea su tag y su release.
+
+Detalles en [CONTRIBUTING.md](CONTRIBUTING.md#español).
 
 ## Licencia
 
