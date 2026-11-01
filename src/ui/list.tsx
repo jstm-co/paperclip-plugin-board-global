@@ -3,6 +3,7 @@
 import { useMemo, type CSSProperties, type ReactNode } from "react";
 import {
   groupIssues,
+  pinFreshRows,
   progressOf,
   projectLabel,
   relativeTime,
@@ -166,13 +167,16 @@ function ListGroup({
   onMore: (next: number) => void;
 }) {
   const nested = groupBy === "empresa" || groupBy === "proyecto";
-  const rows: RowModel[] = useMemo(() => {
-    if (!nested) return group.issues.map((issue) => ({ issue, tree: null }));
+  const { pinned, rows } = useMemo(() => {
+    if (!nested) return { pinned: [] as RowModel[], rows: group.issues.map((issue): RowModel => ({ issue, tree: null })) };
     const { tree: inTree, flat } = splitTree(index, group.issues);
-    return [
+    const all: RowModel[] = [
       ...treeRows(index, inTree, treeClosed).map((tree) => ({ issue: tree.issue, tree })),
       ...flat.map((issue) => ({ issue, tree: null })),
     ];
+    // Las «Nuevas» van primero y fuera del límite (JST-341), sin sangría de árbol.
+    const split = pinFreshRows(all, index.fresh);
+    return { pinned: split.pinned.map((row) => ({ issue: row.issue, tree: null })), rows: split.rest };
   }, [index, group, nested, treeClosed]);
 
   const limit = requestedLimit ?? (nested ? 12 : 8);
@@ -216,7 +220,7 @@ function ListGroup({
       </button>
       {closed ? null : (
         <>
-          {rows.slice(0, limit).map((row) => (
+          {[...pinned, ...rows.slice(0, limit)].map((row) => (
             <ListRow
               key={row.issue.id}
               index={index}

@@ -963,6 +963,26 @@ export function treeRows(index: BoardIndex, issues: readonly BoardIssue[], close
   return rows;
 }
 
+/**
+ * Tareas recién creadas («Nueva»): van primero en su grupo de la Lista y fuera del
+ * límite de filas, aunque el árbol las ponga después (JST-341). Solo se fijan las que
+ * no cuelgan de otra ni tienen subtareas: una tarea con jerarquía conserva su lugar.
+ */
+export function pinFreshRows<T extends { issue: BoardIssue; tree: Pick<TreeRow, "depth" | "kidCount"> | null }>(
+  rows: readonly T[],
+  fresh: ReadonlySet<string> | undefined,
+): { pinned: T[]; rest: T[] } {
+  if (!fresh || fresh.size === 0) return { pinned: [], rest: [...rows] };
+  const pinned: T[] = [];
+  const rest: T[] = [];
+  for (const row of rows) {
+    const loose = !row.tree || (row.tree.depth === 0 && row.tree.kidCount === 0);
+    (fresh.has(row.issue.id) && loose ? pinned : rest).push(row);
+  }
+  pinned.sort((a, b) => b.issue.updatedAt.localeCompare(a.issue.updatedAt));
+  return { pinned, rest };
+}
+
 // ---------------------------------------------------------------------------
 // Utilidades de presentación
 // ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ import {
   isKpiActive,
   openByCompany,
   parseBoardQuery,
+  pinFreshRows,
   progressOf,
   relativeTime,
   relaxSuggestions,
@@ -528,6 +529,39 @@ describe("orden", () => {
       },
     ]);
     expect(sortIssues(parentFirst, parentFirst.issues).map((i) => i.id)).toEqual(["b", "a", "c"]);
+  });
+});
+
+describe("tareas nuevas en la Lista (JST-341)", () => {
+  const row = (id: string, tree: { depth: number; kidCount: number } | null, updatedAt = "2026-10-09T00:00:00.000Z") => ({
+    issue: issue(id, "c-bet", { updatedAt }),
+    tree,
+  });
+  const leaf = { depth: 0, kidCount: 0 };
+
+  it("fija las nuevas sueltas al inicio, aunque el árbol las ponga después", () => {
+    const rows = [row("p", { depth: 0, kidCount: 2 }), row("k", { depth: 1, kidCount: 0 }), row("x", leaf), row("n", leaf), row("f", null)];
+    const { pinned, rest } = pinFreshRows(rows, new Set(["n"]));
+    expect(pinned.map((r) => r.issue.id)).toEqual(["n"]);
+    expect(rest.map((r) => r.issue.id)).toEqual(["p", "k", "x", "f"]);
+  });
+
+  it("la más reciente va primera y las filas con jerarquía conservan su lugar", () => {
+    const rows = [
+      row("p", { depth: 0, kidCount: 1 }),
+      row("old", leaf, "2026-10-10T00:00:00.000Z"),
+      row("new", null, "2026-10-12T00:00:00.000Z"),
+      row("kid", { depth: 1, kidCount: 0 }, "2026-10-13T00:00:00.000Z"),
+    ];
+    const { pinned, rest } = pinFreshRows(rows, new Set(["old", "new", "kid", "p"]));
+    expect(pinned.map((r) => r.issue.id)).toEqual(["new", "old"]);
+    expect(rest.map((r) => r.issue.id)).toEqual(["p", "kid"]);
+  });
+
+  it("sin nuevas no cambia nada", () => {
+    const rows = [row("a", leaf), row("b", null)];
+    expect(pinFreshRows(rows, undefined)).toEqual({ pinned: [], rest: rows });
+    expect(pinFreshRows(rows, new Set()).rest).toEqual(rows);
   });
 });
 
