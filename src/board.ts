@@ -294,6 +294,8 @@ export interface BoardIndex {
   waiting: Map<string, Waiting>;
   /** Alguna empresa devolvió el feed del Inbox. Si no, «Te toca» no está disponible (§4.4). */
   tocaAvailable: boolean;
+  /** Tareas recién creadas (JST-333): van primeras en su grupo hasta que se actualiza el board. */
+  fresh?: ReadonlySet<string>;
 }
 
 export function toBoardCompany(
@@ -567,6 +569,7 @@ export function filterIssues(index: BoardIndex, filters: BoardFilters, except?: 
 export function sortIssues(index: BoardIndex, issues: readonly BoardIssue[]): BoardIssue[] {
   return [...issues].sort(
     (a, b) =>
+      Number(index.fresh?.has(b.id) ?? false) - Number(index.fresh?.has(a.id) ?? false) ||
       Number(index.waiting.has(b.id)) - Number(index.waiting.has(a.id)) ||
       (PRIORITY_RANK[a.priority] ?? 4) - (PRIORITY_RANK[b.priority] ?? 4) ||
       Number(index.kids.has(b.id)) - Number(index.kids.has(a.id)) ||

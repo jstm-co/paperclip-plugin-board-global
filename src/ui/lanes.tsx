@@ -18,6 +18,7 @@ import {
 import { isOpenStatus, type BoardIssue, type IssueStatus } from "../shared.js";
 import { Card } from "./card.js";
 import { Avatar, CompanyTag, STATUS_LABELS, StatusIcon, TocaPill, companyClass, companyStyle, cx, plural } from "./common.js";
+import { CreateSlot } from "./create.js";
 import { LANE_META } from "./filters.js";
 import { Icon } from "./icons.js";
 import type { KanbanUi } from "./kanban.js";
@@ -284,6 +285,7 @@ export function LaneBoard({
                         +{cell.issues.length - limit} más
                       </button>
                     ) : null}
+                    <CreateSlot origin={{ surface: "cell", status: cell.status, by: laneBy, key: lane.key }} />
                   </div>
                 );
               })}

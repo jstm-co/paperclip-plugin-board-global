@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildBoardIndex, companyPaletteKeys, withBlockedBy, type BoardIndex } from "../board.js";
-import { DATA_COMPANY_ISSUES, type CompanyBoard, type CompanyIssues, type IssueStatus } from "../shared.js";
+import { insertIssue } from "../create.js";
+import { DATA_COMPANY_ISSUES, type BoardIssue, type CompanyBoard, type CompanyIssues, type IssueStatus } from "../shared.js";
 import {
   getCompanyData,
   listAgents,
@@ -143,12 +144,26 @@ export function useBoardData() {
 
   const loadsRef = useRef(loads);
   loadsRef.current = loads;
-  const retry = useCallback(async (companyId: string) => {
+  /**
+   * Recarga una empresa. Con `quiet` (tras crear una tarea) no la vacía mientras
+   * carga y, si falla, deja lo que había en vez de mostrar el error.
+   */
+  const retry = useCallback(async (companyId: string, quiet = false) => {
     const company = loadsRef.current[companyId]?.company;
     if (!company) return;
-    setLoads((prev) => ({ ...prev, [companyId]: { company, status: "wait" } }));
+    if (!quiet) setLoads((prev) => ({ ...prev, [companyId]: { company, status: "wait" } }));
     const load = await loadOne(company);
+    if (quiet && load.status !== "ok") return;
     setLoads((prev) => ({ ...prev, [companyId]: load }));
+  }, []);
+
+  /** Inserta una tarea recién creada, primera de su empresa (se confirma después con `retry`). */
+  const addIssue = useCallback((issue: BoardIssue) => {
+    setLoads((prev) => {
+      const load = prev[issue.companyId];
+      if (!load?.board) return prev;
+      return { ...prev, [issue.companyId]: { ...load, board: { ...load.board, issues: insertIssue(load.board.issues, issue) } } };
+    });
   }, []);
 
   /**
@@ -178,5 +193,5 @@ export function useBoardData() {
   );
   const failed = useMemo(() => Object.values(loads).filter((load) => load.status === "err"), [loads]);
 
-  return { companies, loads, index, failed, ready, refreshing, listError, loadedAt, refresh, retry, moveIssue };
+  return { companies, loads, index, failed, ready, refreshing, listError, loadedAt, refresh, retry, addIssue, moveIssue };
 }

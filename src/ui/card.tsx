@@ -29,6 +29,7 @@ import {
   assigneeName,
   cx,
 } from "./common.js";
+import { MarkPill, markClass, useMark } from "./create.js";
 import { Icon } from "./icons.js";
 import { Layer } from "./layer.js";
 
@@ -157,10 +158,13 @@ export const Card = memo(function Card({
   const parent = issue.parentId ? index.byId.get(issue.parentId) : undefined;
   const who = assigneeName(index, issue);
   const href = hrefFor(index, issue);
+  const mark = useMark(issue.id);
   return (
     <div
+      data-iid={issue.id}
       className={cx(
         "gb-card",
+        markClass(mark),
         issue.priority === "critical" && "is-crit",
         issue.status === "blocked" && "is-blocked",
         index.waiting.has(issue.id) && "gb-waiting",
@@ -181,6 +185,7 @@ export const Card = memo(function Card({
         <CompanyTag company={company} solid />
         <span className="gb-id">{issue.identifier}</span>
         <PriorityBadge priority={issue.priority} />
+        <MarkPill mark={mark} />
       </div>
       <div className="gb-t">
         {/* Enlace normal que cubre la tarjeta (§5): sin `draggable` para que se arrastre la tarjeta. */}

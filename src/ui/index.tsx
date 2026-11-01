@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   useHostLocation,
   useHostNavigation,
@@ -6,17 +6,25 @@ import {
   type PluginSidebarProps,
 } from "@paperclipai/plugin-sdk/ui";
 import {
+  NO_PROJECT,
+  assigneeKey,
+  buildBoardIndex,
   filterIssues,
   kanbanLanes,
   kanbanStatuses,
+  laneKeyOf,
   parseBoardQuery,
   serializeBoardQuery,
   type BoardFilters,
+  type BoardIndex,
   type BoardQuery,
+  type GroupBy,
   type LaneBy,
 } from "../board.js";
 import { PAGE_ROUTE, type BoardIssue, type IssueStatus } from "../shared.js";
+import { getSessionUserId } from "./bridge.js";
 import { Peek } from "./card.js";
+import { CreateProvider, MarksProvider, useCreateFlow, useMarks } from "./create.js";
 import { STATUS_LABELS, plural, useNow } from "./common.js";
 import { FilterBar } from "./filters.js";
 import { Header, KpiLine, Kpis } from "./header.js";
@@ -99,6 +107,24 @@ function useFillHeight() {
   return { ref, height };
 }
 
+const EMPTY_INDEX: BoardIndex = buildBoardIndex([]);
+
+/** Clave de la tarea en los grupos de la Lista, para desplegar el grupo donde cae una tarea nueva. */
+function listGroupKey(issue: BoardIssue, group: GroupBy): string {
+  switch (group) {
+    case "empresa":
+      return issue.companyId;
+    case "proyecto":
+      return issue.projectId ?? NO_PROJECT;
+    case "responsable":
+      return assigneeKey(issue);
+    case "estado":
+      return issue.status;
+    case "prioridad":
+      return issue.priority;
+  }
+}
+
 function toggleIn(set: ReadonlySet<string>, key: string): Set<string> {
   const next = new Set(set);
   if (next.has(key)) next.delete(key);
@@ -130,14 +156,27 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
   const setFilters = (filters: BoardFilters) => setQuery({ ...query, filters });
   const lanes = query.view === "kanban" ? query.lanes : null;
 
-  const { index } = data;
+  // Tareas recién creadas (JST-333): marcadas y primeras en su grupo hasta que se actualiza el board.
+  const { marks, set: setMark, clear: clearMark } = useMarks(data.loadedAt);
+  const freshIds = useMemo(() => new Set([...marks].flatMap(([id, mark]) => (mark.kind === "new" ? [id] : []))), [marks]);
+  const index = useMemo(() => (data.index ? { ...data.index, fresh: freshIds } : null), [data.index, freshIds]);
   const loading = !data.ready;
   // «Actualizada · últimos 7 días» se cuenta desde ahora cada vez que se pinta (§5).
   const filterNow = query.filters.act ? now : 0;
-  const filtered = useMemo(
-    () => (index ? filterIssues(index, query.filters, undefined, filterNow || Date.now()) : []),
-    [index, query.filters, filterNow],
-  );
+  const filtered = useMemo(() => {
+    if (!index) return [];
+    const base = filterIssues(index, query.filters, undefined, filterNow || Date.now());
+    if (marks.size === 0) return base;
+    // Una tarea recién creada se ve hasta actualizar aunque no calce con los filtros, salvo si su empresa quedó fuera (§7.6).
+    const shown = new Set(base.map((issue) => issue.id));
+    const extra = [...marks.keys()].flatMap((id) => {
+      const issue = index.byId.get(id);
+      const prefix = issue ? index.companyById.get(issue.companyId)?.prefix : undefined;
+      const companyOut = query.filters.emp.length > 0 && !(prefix && query.filters.emp.includes(prefix));
+      return issue && !shown.has(id) && !companyOut ? [issue] : [];
+    });
+    return extra.length > 0 ? [...base, ...extra] : base;
+  }, [index, marks, query.filters, filterNow]);
 
   // Estado de la vista que no va en la URL: grupos plegados, «+N más», subtareas por tarjeta.
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
@@ -177,6 +216,36 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
     resetCards();
     setQuery(next);
   };
+
+  // «+ Crear»: el compositor vive en la página y los puntos de entrada lo abren por contexto.
+  const reveal = useCallback(
+    (issue: BoardIssue) => {
+      const keys = [`${issue.status}:${issue.companyId}`, `l:${query.group}:${listGroupKey(issue, query.group)}`];
+      setCollapsed((prev) => (keys.some((key) => prev.has(key)) ? new Set([...prev].filter((key) => !keys.includes(key))) : prev));
+      if (lanes) {
+        const laneKey = laneUiKey(lanes, laneKeyOf(issue, lanes));
+        setClosedLanes((prev) => (prev.has(laneKey) ? new Set([...prev].filter((key) => key !== laneKey)) : prev));
+      }
+    },
+    [query.group, lanes],
+  );
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!context.userId) void getSessionUserId().then(setSessionUserId);
+  }, [context.userId]);
+  const retryCompany = data.retry;
+  const refreshCompany = useCallback((companyId: string) => retryCompany(companyId, true), [retryCompany]);
+  const create = useCreateFlow({
+    index: index ?? EMPTY_INDEX,
+    filters: query.filters,
+    userId: context.userId ?? sessionUserId,
+    addIssue: data.addIssue,
+    refreshCompany,
+    setMark,
+    clearMark,
+    reveal,
+    toast,
+  });
 
   // Vista previa al pasar: aparece tras 450 ms y se oculta al salir, al hacer scroll o al arrastrar.
   const [peek, setPeek] = useState<{ issueId: string; rect: DOMRect } | null>(null);
@@ -231,6 +300,8 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
   const peekIssue = peek && index ? index.byId.get(peek.issueId) : undefined;
 
   return (
+    <CreateProvider value={create}>
+    <MarksProvider value={marks}>
     <div ref={rootRef} className="gb" style={{ height }} onScrollCapture={() => onPeek(null)}>
       <Header
         loading={loading}
@@ -332,6 +403,8 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
       {peekIssue && peek && !dragging ? <Peek index={index!} issue={peekIssue} anchor={peek.rect} now={now} /> : null}
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>
+    </MarksProvider>
+    </CreateProvider>
   );
 }
 

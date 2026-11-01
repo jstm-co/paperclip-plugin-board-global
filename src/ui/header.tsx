@@ -17,6 +17,7 @@ import {
 } from "../board.js";
 import { OPEN_STATUSES, isOpenStatus, type BoardIssue, type IssueStatus } from "../shared.js";
 import { CompanyTag, PriorityIcon, STATUS_LABELS, Skeleton, StatusIcon, companyClass, companyStyle, cx, plural } from "./common.js";
+import { CreateHeadButton } from "./create.js";
 import { Icon } from "./icons.js";
 import { FollowTip } from "./layer.js";
 import type { CompanyLoad } from "./useBoardData.js";
@@ -79,6 +80,7 @@ export function Header({
           Lista
         </button>
       </div>
+      <CreateHeadButton disabled={loading} />
     </div>
   );
 }

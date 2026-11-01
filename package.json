@@ -1,6 +1,6 @@
 {
   "name": "paperclip-plugin-board-global",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "type": "module",
   "description": "Board global y Dashboard global para Paperclip: las tareas y el Dashboard de todas las empresas de la instancia en una sola vista",
   "homepage": "https://github.com/jstm-co/paperclip-plugin-board-global#readme",
