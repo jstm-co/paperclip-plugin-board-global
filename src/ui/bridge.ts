@@ -12,7 +12,9 @@
 // Los nombres de proyectos y agentes salen de la API nativa
 // (`GET /api/companies/:id/projects|agents`), y el cambio de estado usa
 // `PATCH /api/issues/:id`, lo mismo que el kanban nativo, para que apliquen
-// todas las reglas del núcleo (runs, revisión, wakeups).
+// todas las reglas del núcleo (runs, revisión, wakeups). Crear tareas usa
+// `POST /api/companies/:id/issues` con la misma sesión, sin capacidades nuevas
+// (spike JST-334).
 //
 // «Te toca» sale del feed del Inbox (`GET /api/companies/:id/attention`). Pide
 // sesión de board con usuario: funciona desde el navegador, no con la API key
@@ -28,6 +30,7 @@
 // El Dashboard global usa las mismas fuentes que el Dashboard nativo de cada
 // empresa: el resumen (`/dashboard`), las tarjetas de agentes (`/live-runs`), la
 // actividad (`/activity`) y la lista de tareas del worker.
+import type { CreateRequest, CreatedIssue } from "../create.js";
 import {
   OPEN_STATUSES,
   PLUGIN_KEY,
@@ -61,6 +64,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(typeof message === "string" ? message : JSON.stringify(message));
   }
   return body as T;
+}
+
+/**
+ * Usuario de la sesión (better-auth). La página del plugin no siempre recibe
+ * `userId` en su contexto; «Yo» en En curso lo necesita (`assigneeUserId`).
+ */
+export async function getSessionUserId(): Promise<string | null> {
+  const session = await request<{ user?: { id?: string } } | null>("/auth/get-session").catch(() => null);
+  return session?.user?.id ?? null;
 }
 
 /** Empresas visibles para el usuario, sin las archivadas. */
@@ -142,5 +154,17 @@ export function updateIssueStatus(issueId: string, status: IssueStatus): Promise
   return request(`/issues/${encodeURIComponent(issueId)}`, {
     method: "PATCH",
     body: JSON.stringify({ status }),
+  });
+}
+
+/**
+ * Crea una tarea con la sesión del usuario, como el PATCH del arrastre. Si hay
+ * una abierta con el mismo título de las últimas 48 h, el servidor devuelve esa
+ * con `deduplicated: true` y no crea otra.
+ */
+export function createIssue(companyId: string, body: CreateRequest["body"]): Promise<CreatedIssue> {
+  return request(`/companies/${encodeURIComponent(companyId)}/issues`, {
+    method: "POST",
+    body: JSON.stringify(body),
   });
 }

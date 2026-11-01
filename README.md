@@ -26,6 +26,7 @@ Both pages show up in the sidebar of every company. **The interface is in Spanis
 - **Filters:** search, project, status, assignee and priority. Company, label and last-updated date are under «Más filtros» (more filters). Each menu shows how many issues match each option.
   - **Search** matches ID, title or company, ignoring accents and case. An issue shows up if the text is in its ID or title, or if its company name, a word of that name, or its prefix starts with the text. The company part needs at least 3 characters and does not search inside the name: `corp` does not bring up all of «Betacorp».
 - **Drag** a card to another column to change its status with `PATCH /api/issues/:id`, just like the built-in kanban. The toast offers «Deshacer» (undo). If the API rejects the change, the card goes back.
+- **Create issues:** «+ Crear» (create) at the bottom of the Backlog, Por hacer and En curso columns opens a composer in place: type a title and press Enter. The same entry point exists in each swimlane cell, as a «Nueva tarea en…» row under each List group, and as the «Crear tarea» button in the header. Company, project, assignee and priority come from the column, swimlane, group or the active filter; with no company to start from you choose one. Assigning an agent wakes it up (except in Backlog), and the composer says so; En curso needs an assignee, so it starts as «Yo» (you). It uses `POST /api/companies/:id/issues` with your session, so it needs no new permission. A title already open in the last 48 hours is not created twice (the server returns the existing issue and the board marks it).
 - **Preview** after hovering a card for 450 ms: details, «Te toca» and the issue tree.
 - **Per-company loading:** if a company does not respond, the rest of the board keeps working and that company can be retried on its own.
 - **Company colors:** if the company has a brand color in Paperclip («Brand color» in its settings), that one is used. Otherwise the first 4 companies in alphabetical order of the name get one of 4 fixed colors, and from the fifth on they are gray. The prefix always goes next to the color.
@@ -178,7 +179,7 @@ npx paperclipai plugin uninstall jstm.board-global --force    # deletes everythi
 | `ui.page.register`, `ui.sidebar.register` | The two pages and their sidebar links. |
 
 - The plugin does not call any external service: everything goes to your own Paperclip instance's API.
-- Projects, agents, the Inbox («Te toca»), the Dashboard and the status change when dragging use the built-in API with the session of the user viewing the page. That way the same core rules and permissions apply.
+- Projects, agents, the Inbox («Te toca»), the Dashboard and the status change when dragging and creating issues use the built-in API with the session of the user viewing the page. That way the same core rules and permissions apply.
 - Saved views belong to the whole instance: there are no per-user views.
 
 ## Known limitations

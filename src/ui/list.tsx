@@ -3,6 +3,7 @@
 import { useMemo, type CSSProperties, type ReactNode } from "react";
 import {
   groupIssues,
+  pinFreshRows,
   progressOf,
   projectLabel,
   relativeTime,
@@ -14,6 +15,7 @@ import {
   type IssueGroup,
   type TreeRow,
 } from "../board.js";
+import { canCreateIn, type CreateOrigin } from "../create.js";
 import { OPEN_STATUSES, isOpenStatus, type BoardIssue, type IssuePriority, type IssueStatus } from "../shared.js";
 import { hrefFor } from "./card.js";
 import {
@@ -33,6 +35,7 @@ import {
   openHref,
   plural,
 } from "./common.js";
+import { CreateSlot, MarkPill, markClass, useMark } from "./create.js";
 import { Icon } from "./icons.js";
 
 const MORE_STEP = 25;
@@ -164,13 +167,16 @@ function ListGroup({
   onMore: (next: number) => void;
 }) {
   const nested = groupBy === "empresa" || groupBy === "proyecto";
-  const rows: RowModel[] = useMemo(() => {
-    if (!nested) return group.issues.map((issue) => ({ issue, tree: null }));
+  const { pinned, rows } = useMemo(() => {
+    if (!nested) return { pinned: [] as RowModel[], rows: group.issues.map((issue): RowModel => ({ issue, tree: null })) };
     const { tree: inTree, flat } = splitTree(index, group.issues);
-    return [
+    const all: RowModel[] = [
       ...treeRows(index, inTree, treeClosed).map((tree) => ({ issue: tree.issue, tree })),
       ...flat.map((issue) => ({ issue, tree: null })),
     ];
+    // Las «Nuevas» van primero y fuera del límite (JST-341), sin sangría de árbol.
+    const split = pinFreshRows(all, index.fresh);
+    return { pinned: split.pinned.map((row) => ({ issue: row.issue, tree: null })), rows: split.rest };
   }, [index, group, nested, treeClosed]);
 
   const limit = requestedLimit ?? (nested ? 12 : 8);
@@ -180,6 +186,13 @@ function ListGroup({
   );
   const closedCount = group.issues.filter((issue) => !isOpenStatus(issue.status)).length;
   const company = groupBy === "empresa" && group.companyId ? index.companyById.get(group.companyId) : undefined;
+  // Fila «Nueva tarea en…» al pie (JST-333 §3.3): en Por hacer, o en el estado del grupo si se agrupa por estado.
+  const createOrigin: CreateOrigin | null =
+    groupBy === "estado"
+      ? canCreateIn(group.key as IssueStatus)
+        ? { surface: "group", status: group.key as IssueStatus, by: groupBy, key: group.key }
+        : null
+      : { surface: "group", status: "todo", by: groupBy, key: group.key };
 
   return (
     <div className={cx("gb-lgrp", closed && "is-closed", company ? companyClass(company) : "is-plain")} style={companyStyle(company)}>
@@ -207,7 +220,7 @@ function ListGroup({
       </button>
       {closed ? null : (
         <>
-          {rows.slice(0, limit).map((row) => (
+          {[...pinned, ...rows.slice(0, limit)].map((row) => (
             <ListRow
               key={row.issue.id}
               index={index}
@@ -225,6 +238,7 @@ function ListGroup({
               </button>
             </div>
           ) : null}
+          {createOrigin ? <CreateSlot origin={createOrigin} groupLabel={group.label} /> : null}
         </>
       )}
     </div>
@@ -270,9 +284,11 @@ function ListRow({
   const href = hrefFor(index, issue);
   const progress = progressOf(index, issue);
   const who = assigneeName(index, issue);
+  const mark = useMark(issue.id);
   return (
     <div
-      className={cx("gb-row", tree?.context && "gb-ctx", index.waiting.has(issue.id) && "is-w")}
+      data-iid={issue.id}
+      className={cx("gb-row", markClass(mark), tree?.context && "gb-ctx", index.waiting.has(issue.id) && "is-w")}
       onClick={(event) => {
         // El enlace cubre la fila; esto cubre los iconos que quedan encima para mostrar su título.
         if (isOwnClick(event)) openHref(href, event);
@@ -293,6 +309,7 @@ function ListRow({
         >
           {issue.title}
         </a>
+        <MarkPill mark={mark} />
         {index.waiting.has(issue.id) ? <TocaPill /> : null}
         {progress.total > 0 ? (
           <span className="gb-pg">

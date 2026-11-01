@@ -294,6 +294,8 @@ export interface BoardIndex {
   waiting: Map<string, Waiting>;
   /** Alguna empresa devolvió el feed del Inbox. Si no, «Te toca» no está disponible (§4.4). */
   tocaAvailable: boolean;
+  /** Tareas recién creadas (JST-333): van primeras en su grupo hasta que se actualiza el board. */
+  fresh?: ReadonlySet<string>;
 }
 
 export function toBoardCompany(
@@ -567,6 +569,7 @@ export function filterIssues(index: BoardIndex, filters: BoardFilters, except?: 
 export function sortIssues(index: BoardIndex, issues: readonly BoardIssue[]): BoardIssue[] {
   return [...issues].sort(
     (a, b) =>
+      Number(index.fresh?.has(b.id) ?? false) - Number(index.fresh?.has(a.id) ?? false) ||
       Number(index.waiting.has(b.id)) - Number(index.waiting.has(a.id)) ||
       (PRIORITY_RANK[a.priority] ?? 4) - (PRIORITY_RANK[b.priority] ?? 4) ||
       Number(index.kids.has(b.id)) - Number(index.kids.has(a.id)) ||
@@ -958,6 +961,26 @@ export function treeRows(index: BoardIndex, issues: readonly BoardIssue[], close
   };
   for (const root of roots) walk(root, 0, true, []);
   return rows;
+}
+
+/**
+ * Tareas recién creadas («Nueva»): van primero en su grupo de la Lista y fuera del
+ * límite de filas, aunque el árbol las ponga después (JST-341). Solo se fijan las que
+ * no cuelgan de otra ni tienen subtareas: una tarea con jerarquía conserva su lugar.
+ */
+export function pinFreshRows<T extends { issue: BoardIssue; tree: Pick<TreeRow, "depth" | "kidCount"> | null }>(
+  rows: readonly T[],
+  fresh: ReadonlySet<string> | undefined,
+): { pinned: T[]; rest: T[] } {
+  if (!fresh || fresh.size === 0) return { pinned: [], rest: [...rows] };
+  const pinned: T[] = [];
+  const rest: T[] = [];
+  for (const row of rows) {
+    const loose = !row.tree || (row.tree.depth === 0 && row.tree.kidCount === 0);
+    (fresh.has(row.issue.id) && loose ? pinned : rest).push(row);
+  }
+  pinned.sort((a, b) => b.issue.updatedAt.localeCompare(a.issue.updatedAt));
+  return { pinned, rest };
 }
 
 // ---------------------------------------------------------------------------

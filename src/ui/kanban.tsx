@@ -1,10 +1,12 @@
 // Kanban (§3.5–3.6): una columna por estado y, dentro, un grupo por empresa
 // con 3 tarjetas y «+N más». Todo el cuerpo de la columna es zona de soltar.
 import { useState, type DragEvent } from "react";
+import { canCreateIn } from "../create.js";
 import { kanbanStatuses, sortIssues, type BoardIndex, type BoardQuery } from "../board.js";
 import { isOpenStatus, type BoardIssue, type IssueStatus } from "../shared.js";
 import { Card } from "./card.js";
 import { CompanyTag, STATUS_LABELS, Skeleton, StatusIcon, TocaPill, companyClass, companyStyle, cx } from "./common.js";
+import { CreateSlot } from "./create.js";
 import { Icon } from "./icons.js";
 
 /** Tarjetas por grupo de empresa antes de «+N más» (§3.6). */
@@ -99,7 +101,7 @@ export function KanbanBoard({
               <span className="gb-cnt gb-tnum">{items.length}</span>
             </div>
             <div className={cx("gb-body", dropOn === status && "gb-drop-on")} {...dropHandlers(status)}>
-              {groups.length === 0 ? <div className="gb-colempty">Sin tareas · suelta aquí</div> : null}
+              {groups.length === 0 && !canCreateIn(status) ? <div className="gb-colempty">Sin tareas · suelta aquí</div> : null}
               {groups.map(({ company, items: groupItems }) => {
                 const key = `${status}:${company.id}`;
                 const closed = ui.collapsed.has(key);
@@ -141,6 +143,7 @@ export function KanbanBoard({
                   </div>
                 );
               })}
+              <CreateSlot origin={{ surface: "column", status }} />
             </div>
           </section>
         );
