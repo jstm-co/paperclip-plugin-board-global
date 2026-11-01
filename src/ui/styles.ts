@@ -592,6 +592,9 @@ button.gb-corow:hover .gb-bar { filter: brightness(1.15); }
   .gb-cr-long { display: none; } .gb-cr-short { display: inline; }
   .gb-cr-pop { left: 8px !important; right: 8px; bottom: 8px; top: auto !important; width: auto; max-width: none; }
   .gb-toasts { left: 12px; right: 12px; transform: none; align-items: stretch; }
+  /* Con un compositor abierto en una columna, celda o grupo, el board deja de ser una ventana de alto fijo (en celular la cabecera se come casi todo el alto y el compositor quedaba recortado): la página crece y hace el scroll (JST-342). */
+  .gb:has(.gb-cr-comp:not(.is-head)) { height: auto !important; overflow: visible; }
+  .gb:has(.gb-cr-comp:not(.is-head)) :is(.gb-board, .gb-list, .gb-lanewrap) { min-height: 560px; }
 }
 `;
 

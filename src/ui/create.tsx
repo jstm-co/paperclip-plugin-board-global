@@ -402,6 +402,17 @@ function Pick({ on, disabled, right, onPick, children }: { on: boolean; disabled
   );
 }
 
+/** Alto de la barra fija inferior del host (celular); 0 si no hay. Se usa su alto y no su posición: el host la esconde al bajar y la vuelve a mostrar al subir. */
+function hostBottomInset(): number {
+  let inset = 0;
+  document.querySelectorAll<HTMLElement>("nav.mobile-bottom-nav, [class*='bottom-nav']").forEach((el) => {
+    if (getComputedStyle(el).position !== "fixed") return;
+    const r = el.getBoundingClientRect();
+    if (r.height > 0 && r.top > window.innerHeight / 2) inset = Math.max(inset, r.height);
+  });
+  return Math.ceil(inset);
+}
+
 function Composer({ origin }: { origin: CreateOrigin }) {
   const api = useCreate()!;
   const { session, index, userId } = api;
@@ -423,7 +434,11 @@ function Composer({ origin }: { origin: CreateOrigin }) {
   useLayoutEffect(() => {
     focusTitle();
     const narrow = window.matchMedia("(max-width: 640px)").matches;
-    if (origin.surface !== "head") rootRef.current?.scrollIntoView({ block: "nearest", inline: narrow ? "center" : "nearest" });
+    const root = rootRef.current;
+    if (!root || origin.surface === "head") return;
+    // En celular el host dibuja una barra fija abajo: se descuenta del margen de scroll para que no tape el compositor.
+    root.style.scrollMarginBottom = `${hostBottomInset() + 8}px`;
+    root.scrollIntoView({ block: "nearest", inline: narrow ? "center" : "nearest" });
   }, [focusTitle, origin.surface]);
 
   const companyRow = useRef<HTMLDivElement>(null);
