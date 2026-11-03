@@ -1,10 +1,12 @@
 import type { PaperclipPluginManifestV1 } from "@paperclipai/plugin-sdk";
 import { DASHBOARD_ROUTE, PAGE_ROUTE } from "./shared.js";
 
+declare const __BOARD_GLOBAL_VERSION__: string;
+
 const manifest: PaperclipPluginManifestV1 = {
   id: "jstm.board-global",
   apiVersion: 1,
-  version: "0.7.0",
+  version: __BOARD_GLOBAL_VERSION__,
   displayName: "Board global",
   description: "Tareas y Dashboard de todas las empresas de la instancia en una sola vista (kanban, lista y comparativa).",
   author: "JSTM",

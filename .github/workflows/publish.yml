@@ -1,4 +1,4 @@
-# Publishes to npm when a pull request is merged into main with a new version.
+# Publishes package changes merged into main with an automatic UTC date version.
 # Uses npm trusted publishing (OIDC): no npm token is stored in the repository.
 # The trusted publisher on npm points to this file (publish.yml) and the `npm`
 # environment, which only accepts runs from main.
@@ -35,28 +35,35 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - name: Is this version on npm yet?
+      - name: Decide whether to publish and calculate the version
         id: decide
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
         run: node scripts/release.mjs main
 
       - name: npm 11.5.1 or later (trusted publishing)
         if: steps.decide.outputs.publish == 'true'
         run: npm install -g npm@11 && npm --version
+      - name: Set the release version in the runner only
+        if: steps.decide.outputs.publish == 'true'
+        env:
+          VERSION: ${{ steps.decide.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version
       - if: steps.decide.outputs.publish == 'true'
         run: npm ci
       - if: steps.decide.outputs.publish == 'true'
         run: npm run typecheck
       - if: steps.decide.outputs.publish == 'true'
         run: npm test
-      - if: steps.decide.outputs.publish == 'true'
+      - name: Build the release
+        if: steps.decide.outputs.publish == 'true'
+        env:
+          BOARD_GLOBAL_RELEASE_VERSION: ${{ steps.decide.outputs.version }}
         run: npm run build
       - name: Publish to npm
         if: steps.decide.outputs.publish == 'true'
         run: npm publish --provenance --access public --ignore-scripts
 
       - name: Tag and GitHub release
+        if: steps.decide.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.decide.outputs.version }}
