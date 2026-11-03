@@ -16,8 +16,6 @@
     "dev": "node ./esbuild.config.mjs --watch",
     "test": "vitest run --config ./vitest.config.ts",
     "typecheck": "tsc --noEmit",
-    "sync-version": "node ./scripts/release.mjs sync",
-    "version": "node ./scripts/release.mjs sync",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "paperclipPlugin": {

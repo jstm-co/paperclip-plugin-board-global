@@ -16,24 +16,16 @@ Thanks for helping. Every change goes through a pull request: nobody pushes to `
    npm run build
    ```
 
-3. **Bump the version** if the change touches the plugin, that is, anything other than docs (`*.md`), tests (`tests/`), CI (`.github/`), `scripts/`, `LICENSE`, `.gitignore` or `vitest.config.ts`:
+   A local build injects `YYYY.MDD.0-dev+<sha7>` into the manifest, plus `.dirty` when there are uncommitted changes. It does not modify source files, `package.json` or the lockfile.
 
-   ```bash
-   npm version patch --no-git-tag-version   # fixes
-   npm version minor --no-git-tag-version   # new features
-   npm version major --no-git-tag-version   # breaking changes
-   ```
-
-   This updates `package.json`, `package-lock.json` and the version in `src/manifest.ts`. Commit the three files with your change. A change that adds a capability to the manifest is at least `minor`: Paperclip's `upgrade` rejects it and users have to uninstall (without `--force`) and install again. Say so in the pull request.
-
-4. **Open the pull request** against `main` and fill in the template. The CI runs:
+3. **Open the pull request** against `main` and fill in the template. Do not bump the version by hand. The CI runs:
    - `test (node 22)` and `test (node 24)`: typecheck, tests, build and package contents.
-   - `version`: checks the version bump and tells you what merging will do: publish `X.Y.Z` to npm, or publish nothing (docs, tests or CI only).
+   - `version`: reports whether the pull request changes the published package and merging will publish a release. It is informational; it does not require a version change.
 
-   The branch has to be up to date with `main` before merging. If another pull request published your version first, bump it again.
+   The branch has to be up to date with `main` before merging.
 
-5. **A maintainer reviews and merges** with «Squash and merge»: the pull request title becomes the commit message, so make it a short sentence about the change.
-6. **GitHub Actions publishes it** (`.github/workflows/publish.yml`): it runs the checks again, publishes the new version to npm with provenance, and creates the `vX.Y.Z` tag and its GitHub release. It uses npm trusted publishing, so there is no npm token in the repository.
+4. **A maintainer reviews and merges** with «Squash and merge»: the pull request title becomes the commit message, so make it a short sentence about the change.
+5. **GitHub Actions publishes package changes** (`.github/workflows/publish.yml`). It compares `main` with the latest published tag, calculates the next `YYYY.MDD.N` version in UTC (month × 100 + day, without a leading zero), and sets that version only inside the runner with `npm version --no-git-tag-version`. Then it runs the checks, builds, publishes to npm with provenance, and creates the `vYYYY.MDD.N` tag and GitHub release. Documentation, tests, CI and script-only changes do not publish a release. Publishing uses npm trusted publishing, so there is no npm token in the repository.
 
 ## Guidelines
 
@@ -66,24 +58,16 @@ Gracias por ayudar. Todo cambio entra por un pull request: nadie sube directo a 
    npm run build
    ```
 
-3. **Sube la versión** si el cambio toca el plugin, es decir, cualquier cosa que no sea documentación (`*.md`), pruebas (`tests/`), CI (`.github/`), `scripts/`, `LICENSE`, `.gitignore` o `vitest.config.ts`:
+   Un build local inyecta `AAAA.MDD.0-dev+<sha7>` en el manifiesto, con `.dirty` si hay cambios sin commit. No modifica el código fuente, `package.json` ni el lockfile.
 
-   ```bash
-   npm version patch --no-git-tag-version   # arreglos
-   npm version minor --no-git-tag-version   # funciones nuevas
-   npm version major --no-git-tag-version   # cambios incompatibles
-   ```
-
-   Eso actualiza `package.json`, `package-lock.json` y la versión de `src/manifest.ts`. Sube los tres archivos junto con tu cambio. Un cambio que agrega una capacidad al manifiesto es al menos `minor`: el `upgrade` de Paperclip lo rechaza y hay que desinstalar (sin `--force`) y volver a instalar. Avísalo en el pull request.
-
-4. **Abre el pull request** contra `main` y completa la plantilla. El CI corre:
+3. **Abre el pull request** contra `main` y completa la plantilla. No subas la versión a mano. El CI corre:
    - `test (node 22)` y `test (node 24)`: typecheck, pruebas, build y contenido del paquete.
-   - `version`: revisa la subida de versión y te dice qué hará el merge: publicar `X.Y.Z` en npm, o no publicar nada (solo documentación, pruebas o CI).
+   - `version`: informa si el PR cambia el paquete publicado y si el merge generará una release. Es solo informativo; no exige cambiar la versión.
 
-   La rama tiene que estar al día con `main` antes del merge. Si otro pull request publicó tu versión antes, súbela de nuevo.
+   La rama tiene que estar al día con `main` antes del merge.
 
-5. **Alguien del equipo lo revisa y hace merge** con «Squash and merge»: el título del pull request queda como mensaje del commit, así que escríbelo como una frase corta sobre el cambio.
-6. **GitHub Actions lo publica** (`.github/workflows/publish.yml`): vuelve a correr las pruebas, publica la versión nueva en npm con procedencia (provenance) y crea el tag `vX.Y.Z` y su release en GitHub. Usa la publicación confiable de npm (trusted publishing), así que no hay ningún token de npm en el repositorio.
+4. **Alguien del equipo lo revisa y hace merge** con «Squash and merge»: el título del pull request queda como mensaje del commit, así que escríbelo como una frase corta sobre el cambio.
+5. **GitHub Actions publica los cambios del paquete** (`.github/workflows/publish.yml`). Compara `main` con el tag de la última versión publicada, calcula la siguiente versión `AAAA.MDD.N` en UTC (mes × 100 + día, sin cero delante) y la escribe solo dentro del runner con `npm version --no-git-tag-version`. Después corre las pruebas, construye, publica en npm con procedencia (provenance) y crea el tag `vAAAA.MDD.N` y su release. Los cambios solo de documentación, pruebas, CI o scripts no publican. Usa publicación confiable de npm (trusted publishing), así que no hay ningún token de npm en el repositorio.
 
 ### Pautas
 
