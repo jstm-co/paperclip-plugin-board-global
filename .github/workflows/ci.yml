@@ -1,5 +1,6 @@
 # Checks every pull request: typecheck, tests, build and the release rules.
-# Merging is blocked until these checks pass (rulesets on main and develop).
+# Merging into main is blocked until these checks pass (ruleset on main).
+# The develop ruleset only prevents deletion and force-pushes.
 name: CI
 
 on:
