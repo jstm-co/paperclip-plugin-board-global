@@ -1,5 +1,5 @@
 # Checks every pull request: typecheck, tests, build and the release rules.
-# Merging is blocked until these checks pass (rulesets on main and develop).
+# main requires a PR with green checks; develop cannot be deleted or force-pushed.
 name: CI
 
 on:
