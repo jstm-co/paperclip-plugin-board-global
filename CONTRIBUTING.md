@@ -22,7 +22,7 @@ Thanks for helping. Every change goes through a pull request: nobody pushes to `
    - `test (node 22)` and `test (node 24)`: typecheck, tests, build and package contents.
    - `version`: reports whether the pull request changes the published package and merging will publish a release. It is informational; it does not require a version change.
 
-   The branch has to be up to date with `develop` before merging.
+   Keeping the branch up to date with `develop` is a team convention, not a GitHub requirement. Only release pull requests into `main` must be up to date and pass the required checks.
 
 4. **A maintainer reviews and merges the task pull request into `develop`** with a merge commit. A separate release pull request from `develop` to `main` is merged with a merge commit when a release is approved. After each release, `develop` is fast-forwarded to `main`.
 
@@ -67,7 +67,7 @@ Gracias por ayudar. Todo cambio entra por un pull request: nadie sube directo a 
    - `test (node 22)` y `test (node 24)`: typecheck, pruebas, build y contenido del paquete.
    - `version`: informa si el PR cambia el paquete publicado y si el merge generará una release. Es solo informativo; no exige cambiar la versión.
 
-   La rama tiene que estar al día con `develop` antes del merge.
+   Mantener la rama al día con `develop` es una convención del equipo, no una exigencia de GitHub. Solo los PR de release hacia `main` tienen que estar al día y pasar los checks obligatorios.
 
 4. **Alguien del equipo revisa y fusiona el PR de la tarea en `develop`** con un merge commit. Un PR de release aparte, de `develop` a `main`, se fusiona con un merge commit cuando se aprueba la publicación. Después de cada release, `develop` se adelanta a `main` con fast-forward.
 
