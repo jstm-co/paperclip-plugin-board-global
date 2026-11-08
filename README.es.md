@@ -226,9 +226,9 @@ El host limita cada llamada al worker a una sola empresa. Por eso la UI lista la
 
 Los reportes de errores y las mejoras son bienvenidos en [Issues](https://github.com/jstm-co/paperclip-plugin-board-global/issues) o como pull request. Así funciona:
 
-1. Abre un pull request contra `main`. El CI corre el typecheck, las pruebas y el build.
-2. Si tu cambio toca el plugin (cualquier cosa que no sea documentación, pruebas o CI), sube la versión en el mismo pull request con `npm version patch --no-git-tag-version` (o `minor` / `major`). El check `version` te dice si el merge va a publicar.
-3. Cuando alguien del equipo hace merge, GitHub Actions publica la versión nueva en npm con procedencia (provenance) y crea su tag y su release.
+1. Crea una rama desde `develop` y abre un pull request contra `develop`. El CI corre el typecheck, las pruebas y el build.
+2. No subas la versión a mano. El check `version` informa si el cambio publicará cuando un release llegue a `main`.
+3. Alguien del equipo fusiona el PR de la tarea en `develop` con un merge commit. Cuando se fusiona el PR de release `develop` → `main`, GitHub Actions publica la versión nueva en npm con procedencia (provenance) y crea su tag y su release.
 
 Detalles en [CONTRIBUTING.md](CONTRIBUTING.md#español).
 

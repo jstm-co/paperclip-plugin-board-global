@@ -1,11 +1,11 @@
 # Checks every pull request: typecheck, tests, build and the release rules.
-# Merging is blocked until these checks pass (ruleset on main).
+# Merging is blocked until these checks pass (rulesets on main and develop).
 name: CI
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   contents: read

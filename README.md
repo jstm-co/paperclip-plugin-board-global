@@ -226,9 +226,9 @@ The host limits each worker call to a single company. That is why the UI lists t
 
 Bug reports and improvements are welcome as [issues](https://github.com/jstm-co/paperclip-plugin-board-global/issues) or pull requests. How it works:
 
-1. Open a pull request against `main`. The CI runs the typecheck, the tests and the build.
-2. If your change touches the plugin (anything other than docs, tests or CI), bump the version in the same pull request with `npm version patch --no-git-tag-version` (or `minor` / `major`). The `version` check tells you whether merging will publish.
-3. When a maintainer merges it, GitHub Actions publishes the new version to npm with provenance and creates its tag and release.
+1. Create a branch from `develop` and open a pull request against `develop`. The CI runs the typecheck, the tests and the build.
+2. Do not bump the version by hand. The `version` check reports whether the change will publish when a release reaches `main`.
+3. A maintainer merges the task pull request into `develop` with a merge commit. When the separate `develop` → `main` release pull request is merged, GitHub Actions publishes the new version to npm with provenance and creates its tag and release.
 
 Details in [CONTRIBUTING.md](CONTRIBUTING.md).
 
