@@ -1,6 +1,7 @@
 // Cabecera (§3.1), contadores (§3.2) y «Abiertas por empresa» (§3.3). Con
 // carriles, los contadores van en una línea (Fase 2, JST-21 §4.5).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useHostNavigation } from "@paperclipai/plugin-sdk/ui";
 import {
   KPI_KEYS,
   applyKpi,
@@ -15,7 +16,7 @@ import {
   type BoardView,
   type KpiKey,
 } from "../board.js";
-import { OPEN_STATUSES, isOpenStatus, type BoardIssue, type IssueStatus } from "../shared.js";
+import { DASHBOARD_ROUTE, OPEN_STATUSES, isOpenStatus, type BoardIssue, type IssueStatus } from "../shared.js";
 import { CompanyTag, PriorityIcon, STATUS_LABELS, Skeleton, StatusIcon, companyClass, companyStyle, cx, plural } from "./common.js";
 import { CreateHeadButton } from "./create.js";
 import { Icon } from "./icons.js";
@@ -49,6 +50,7 @@ export function Header({
   view: BoardView;
   onView: (view: BoardView) => void;
 }) {
+  const navigation = useHostNavigation();
   const n = companyCount ?? 4;
   const subtitle = loading
     ? `Cargando las tareas de ${plural(n, "empresa", "empresas")}…`
@@ -56,7 +58,14 @@ export function Header({
   return (
     <div className="gb-head">
       <div>
-        <h1>Board global</h1>
+        <div className="gb-title">
+          <h1>Board global</h1>
+          {/* El menú lateral del espacio «Coordinator» no trae las entradas del plugin: el Dashboard se alcanza desde acá. */}
+          <a {...navigation.linkProps(`/${DASHBOARD_ROUTE}`)} className="gb-xlink" title="Dashboard global: la comparativa entre empresas">
+            Dashboard global
+            <Icon name="chevron-right" size={12} />
+          </a>
+        </div>
         <div className="gb-sub">{subtitle}</div>
       </div>
       <span className="gb-sp" />

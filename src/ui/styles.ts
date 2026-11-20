@@ -81,6 +81,15 @@ svg.gb-i.gb-s14 { width: 14px; height: 14px; } svg.gb-i.gb-s12 { width: 12px; he
 .gb-btn.is-active { border-color: var(--gb-border-strong); background: var(--gb-muted); }
 .gb-btn .gb-v { color: var(--gb-fg); }
 .gb-btn.is-spinning svg:first-child { animation: gb-spin 1s linear infinite; }
+/* Botón de la barra de arriba del host: mismo alto que los demás botones de esa barra. */
+.gb-tb { box-sizing: border-box; height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px 0 8px; border-radius: 8px; border: 1px solid var(--gb-input); background: transparent; font-size: 13px; line-height: 20px; font-weight: 500; white-space: nowrap; color: var(--gb-fg); text-decoration: none; cursor: pointer; }
+.gb-tb:hover { background: var(--gb-hover-strong); }
+.gb-tb.is-on { border-color: var(--gb-border-strong); background: var(--gb-muted); }
+.gb-tb svg { width: 16px; height: 16px; flex: none; }
+/* Enlace a la otra página del plugin, junto al título. */
+.gb-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.gb-xlink { display: inline-flex; align-items: center; gap: 2px; font-size: 12.5px; line-height: 20px; font-weight: 500; color: var(--gb-muted-fg); white-space: nowrap; }
+.gb-xlink:hover { color: var(--gb-fg); text-decoration: underline; }
 .gb-seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--gb-muted); gap: 2px; }
 .gb-seg button { height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--gb-muted-fg); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; }
 .gb-seg button.is-on { background: var(--gb-bg); color: var(--gb-fg); box-shadow: 0 0 0 1px var(--gb-border); }
@@ -652,6 +661,8 @@ button.gb-corow:hover .gb-bar { filter: brightness(1.15); }
 }
 
 @media (max-width: 640px) {
+  .gb-tb { border: 0; padding: 0 6px; }
+  .gb-tb .gb-tb-lbl { display: none; }
   .gb-head { flex-wrap: wrap; }
   .gb-cr-long { display: none; } .gb-cr-short { display: inline; }
   .gb-cr-pop { left: 8px !important; right: 8px; bottom: 8px; top: auto !important; width: auto; max-width: none; }

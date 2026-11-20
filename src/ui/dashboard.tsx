@@ -24,7 +24,7 @@ import {
   type DashboardQuery,
   type SortKey,
 } from "../dashboard.js";
-import { DASHBOARD_ROUTE } from "../shared.js";
+import { DASHBOARD_ROUTE, PAGE_ROUTE } from "../shared.js";
 import { CompanyTag, Skeleton, companyClass, companyStyle, cx, plural, useNow } from "./common.js";
 import { ComparisonTable } from "./comparison.js";
 import { ensureDashboardStyles } from "./dashStyles.js";
@@ -416,7 +416,13 @@ export function DashboardGlobalPage(_props: PluginPageProps) {
     <div className={cx("gb gb-dash", data.refreshing && "is-refreshing")}>
       <div className="gb-dhead">
         <div>
-          <h1>Dashboard global</h1>
+          <div className="gb-title">
+            <h1>Dashboard global</h1>
+            <a {...navigation.linkProps(`/${PAGE_ROUTE}`)} className="gb-xlink" title="Board global: las tareas de todas las empresas">
+              Board global
+              <Icon name="chevron-right" size={12} />
+            </a>
+          </div>
           <div className="gb-sub">{allFailed ? "No se pudieron cargar los datos" : subtitle(model, loading)}</div>
         </div>
         <span className="gb-sp" />
