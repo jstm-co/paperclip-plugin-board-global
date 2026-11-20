@@ -17,6 +17,9 @@ const manifest: PaperclipPluginManifestV1 = {
   // `plugin.state.*` guarda las vistas guardadas, compartidas en la instancia
   // (Fase 2, JST-21). Agregar capacidades obliga a desinstalar y reinstalar
   // (el upgrade lo rechaza).
+  // `ui.action.register` es por el botón de la barra de arriba: el menú lateral
+  // del espacio «Coordinator» (el que Paperclip trae por defecto) no dibuja los
+  // slots `sidebar`, y sin ese botón no hay desde dónde llegar a las páginas.
   capabilities: [
     "companies.read",
     "issues.read",
@@ -24,6 +27,7 @@ const manifest: PaperclipPluginManifestV1 = {
     "plugin.state.write",
     "ui.page.register",
     "ui.sidebar.register",
+    "ui.action.register",
   ],
   entrypoints: {
     worker: "./dist/worker.js",
@@ -56,6 +60,12 @@ const manifest: PaperclipPluginManifestV1 = {
         id: "dashboard-global-sidebar",
         displayName: "Dashboard global",
         exportName: "DashboardGlobalSidebarLink",
+      },
+      {
+        type: "globalToolbarButton",
+        id: "board-global-toolbar",
+        displayName: "Board global",
+        exportName: "BoardGlobalToolbarButton",
       },
     ],
   },

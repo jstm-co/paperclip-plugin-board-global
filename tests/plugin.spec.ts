@@ -51,7 +51,7 @@ async function setup() {
 }
 
 describe("manifest", () => {
-  it("registra las dos páginas y sus entradas del menú lateral; solo escribe su propio estado (vistas guardadas)", () => {
+  it("registra las dos páginas, sus entradas del menú lateral y el botón de la barra de arriba; solo escribe su propio estado (vistas guardadas)", () => {
     const slots = manifest.ui?.slots ?? [];
     expect(slots.filter((slot) => slot.type === "page").map((slot) => slot.routePath)).toEqual([PAGE_ROUTE, DASHBOARD_ROUTE]);
     // «Dashboard global» va debajo de «Board global».
@@ -59,8 +59,19 @@ describe("manifest", () => {
       "BoardGlobalSidebarLink",
       "DashboardGlobalSidebarLink",
     ]);
+    // El menú lateral del espacio «Coordinator» no dibuja los slots `sidebar`:
+    // el botón de la barra de arriba es la entrada que se ve en los dos espacios.
+    expect(slots.filter((slot) => slot.type === "globalToolbarButton").map((slot) => slot.exportName)).toEqual(["BoardGlobalToolbarButton"]);
     expect([...manifest.capabilities].sort()).toEqual(
-      ["companies.read", "issues.read", "plugin.state.read", "plugin.state.write", "ui.page.register", "ui.sidebar.register"].sort(),
+      [
+        "companies.read",
+        "issues.read",
+        "plugin.state.read",
+        "plugin.state.write",
+        "ui.page.register",
+        "ui.sidebar.register",
+        "ui.action.register",
+      ].sort(),
     );
   });
 });
