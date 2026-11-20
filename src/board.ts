@@ -18,7 +18,8 @@ import {
 // Estado en la URL (design-spec §5)
 // ---------------------------------------------------------------------------
 
-export const BOARD_VIEWS = ["kanban", "lista"] as const;
+/** `pedidos`: una fila por tarea raíz con el resumen de su subárbol (`pedidos.ts`). */
+export const BOARD_VIEWS = ["kanban", "lista", "pedidos"] as const;
 export type BoardView = (typeof BOARD_VIEWS)[number];
 
 export const GROUP_BY_OPTIONS = ["empresa", "estado", "proyecto", "responsable", "prioridad"] as const;
@@ -71,8 +72,10 @@ export interface BoardQuery {
   filters: BoardFilters;
   /** `sub=0`: subtareas plegadas en todas las tarjetas. */
   subtasksCollapsed: boolean;
-  /** `cerr=1`: columnas Hecha y Cancelada visibles. */
+  /** `cerr=1`: columnas Hecha y Cancelada visibles; en Pedidos, los pedidos cerrados. */
   showClosed: boolean;
+  /** `ocu`: la vista Pedidos oculta las raíces cuyo título empieza con alguno de estos textos. */
+  hide: string[];
 }
 
 export function emptyFilters(): BoardFilters {
@@ -80,12 +83,13 @@ export function emptyFilters(): BoardFilters {
 }
 
 export function defaultQuery(): BoardQuery {
-  return { view: "kanban", group: "empresa", lanes: null, filters: emptyFilters(), subtasksCollapsed: false, showClosed: false };
+  return { view: "kanban", group: "empresa", lanes: null, filters: emptyFilters(), subtasksCollapsed: false, showClosed: false, hide: [] };
 }
 
 /**
- * «Todo el board» (§3.1 de JST-21): sin filtros ni carriles. Conserva Kanban o
- * Lista, la agrupación, las subtareas plegadas y las cerradas.
+ * «Todo el board» (§3.1 de JST-21): sin filtros, carriles ni títulos ocultos.
+ * Conserva la vista (Kanban, Lista o Pedidos), la agrupación, las subtareas
+ * plegadas y las cerradas.
  */
 export function allBoardQuery(query: BoardQuery): BoardQuery {
   return { ...defaultQuery(), view: query.view, group: query.group, subtasksCollapsed: query.subtasksCollapsed, showClosed: query.showClosed };
@@ -154,6 +158,7 @@ export function parseBoardQuery(search: string): BoardQuery {
     },
     subtasksCollapsed: params.get("sub") === "0",
     showClosed: params.get("cerr") === "1",
+    hide: readList(params, "ocu"),
   };
 }
 
@@ -181,6 +186,7 @@ export function serializeBoardQuery(query: BoardQuery): string {
   if (query.lanes) parts.push(`carr=${query.lanes}`);
   if (query.subtasksCollapsed) parts.push("sub=0");
   if (query.showClosed) parts.push("cerr=1");
+  add("ocu", [...query.hide].sort((a, b) => a.localeCompare(b, "es")));
   return parts.length > 0 ? `?${parts.join("&")}` : "";
 }
 

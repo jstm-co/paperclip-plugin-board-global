@@ -117,6 +117,9 @@ describe("vistas guardadas", () => {
     expect(view.search).toBe("?v=lista&est=blocked");
     expect(updateView([view], "v1", parseBoardQuery("?v=lista&carr=proyecto"))[0].search).toBe("?v=lista");
     expect(normalizeSearch("?v=lista&carr=responsable&grp=proyecto")).toBe("?v=lista&grp=proyecto");
+    // Igual con los títulos ocultos, que solo cuentan en Pedidos (donde no hay carriles).
+    expect(normalizeSearch("?v=lista&ocu=Aviso")).toBe("?v=lista");
+    expect(normalizeSearch("?v=pedidos&carr=empresa&ocu=Aviso")).toBe("?v=pedidos&ocu=Aviso");
   });
 
   it("la pestaña activa es la vista que coincide con la URL; al cambiar un filtro, ninguna", () => {
@@ -183,6 +186,10 @@ describe("pestaña marcada y «Cambios sin guardar»", () => {
     expect(hasViewFilters(parseBoardQuery("?v=lista&sub=0"))).toBe(false);
     expect(hasViewFilters(parseBoardQuery("?act=7d"))).toBe(true);
     expect(hasViewFilters(parseBoardQuery("?carr=proyecto"))).toBe(true);
+    // Los títulos ocultos son de Pedidos: en otra vista no hay nada que guardar.
+    expect(hasViewFilters(parseBoardQuery("?v=pedidos"))).toBe(false);
+    expect(hasViewFilters(parseBoardQuery("?v=pedidos&ocu=Aviso"))).toBe(true);
+    expect(hasViewFilters(parseBoardQuery("?ocu=Aviso"))).toBe(false);
   });
 });
 
@@ -217,6 +224,8 @@ describe("nombre sugerido", () => {
     expect(suggest("?est=blocked&carr=responsable")).toBe("Bloqueadas de todas las empresas · por responsable");
     // En la Lista no hay carriles.
     expect(suggest("?v=lista&carr=empresa")).toBe("Lista por empresa");
+    expect(suggest("?v=pedidos")).toBe("Pedidos");
+    expect(suggest("?v=pedidos&ocu=Aviso&est=blocked")).toBe("Pedidos · Bloqueadas de todas las empresas");
   });
 
   it("no repite un nombre y no pasa de 60 caracteres", () => {

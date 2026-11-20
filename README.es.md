@@ -6,7 +6,7 @@
 
 Plugin para [Paperclip](https://github.com/paperclipai/paperclip) que junta todas las empresas de una instancia en dos páginas:
 
-- **Board global:** las tareas de todas las empresas y de todos sus proyectos en una sola vista, en kanban o en lista, con filtros, vistas guardadas y carriles.
+- **Board global:** las tareas de todas las empresas y de todos sus proyectos en una sola vista, en kanban, en lista o por pedidos, con filtros, vistas guardadas y carriles.
 - **Dashboard global:** el Dashboard de cada empresa, lado a lado, con una comparativa por empresa y la actividad de todas mezclada por fecha.
 
 Las dos aparecen en el menú lateral de cada empresa. La interfaz está en español.
@@ -23,6 +23,13 @@ Las dos aparecen en el menú lateral de cada empresa. La interfaz está en espa�
 - **Tarjeta:** empresa (prefijo y color), ID, título, proyecto (o tarea padre), responsable y prioridad. Las tareas padre muestran sus subtareas abiertas y el avance (2/8).
 - **Te toca:** marca las tareas que esperan tu respuesta y las que dependen de ellas («Espera tu respuesta en ACM-9»). El dato sale del Inbox de cada empresa.
 - **Lista** agrupable por empresa, estado, proyecto, responsable o prioridad. Al agrupar por empresa o proyecto, las subtareas van anidadas bajo su tarea padre.
+- **Pedidos:** una fila por pedido (tarea sin tarea padre) que resume todo lo que se creó por debajo, para ver de un vistazo en qué va cada cosa que pediste.
+  - **Quién tiene la pelota:** las filas van en secciones, con lo que pide algo de ti arriba. «Te toca a ti»: alguna tarea del pedido espera tu respuesta, aunque el pedido ya esté cerrado. «Listo para cerrar»: todas las subtareas están hechas y el pedido sigue abierto. «Bloqueado»: está marcado como bloqueado y ninguna tarea lo frena. «Espera otra tarea»: lo frena una tarea de otro pedido. «En pausa»: hay trabajo hecho y lo que falta está en backlog. «Cerrado con pendientes»: el pedido se cerró y le quedan subtareas abiertas. «Trabajando ahora»: un agente está corriendo en alguna de sus tareas. Después vienen «En curso» y «Sin empezar». «Sin empezar» y «Cerrado» parten plegadas.
+  - **Avance del pedido completo:** cuenta las subtareas de cualquier nivel, sin las canceladas (la tarjeta y la Lista cuentan solo las hijas directas). Al lado dice cuántas quedan abiertas por estado.
+  - **Última novedad:** la primera línea del último comentario del pedido, con su autor, y el último movimiento de cualquiera de sus tareas.
+  - **Desplegar** una fila muestra el árbol completo de subtareas con su estado, su responsable y cuál está corriendo.
+  - Los **filtros** miran la tarea raíz, con tres diferencias: la búsqueda también encuentra un pedido por el ID o el título de una subtarea (y dice cuál), «Te toca» deja los pedidos donde alguna tarea espera tu respuesta y «Actualizada» cuenta el último movimiento de cualquier tarea del pedido.
+  - **«Ocultar títulos que empiezan con…»** esconde los pedidos cuyo título empieza con un texto, por ejemplo los avisos que crea una automatización. Admite varios textos separados por coma y se guarda con la vista. «Ver cerrados» suma los pedidos hechos y cancelados.
 - **Filtros:** búsqueda, proyecto, estado, responsable y prioridad. Empresa, etiqueta y fecha de actualización están en «Más filtros». Los menús muestran cuántas tareas hay por opción.
   - La **búsqueda** encuentra por ID, título o empresa, sin distinguir tildes ni mayúsculas. Una tarea aparece si el texto está en su ID o en su título, o si el nombre de su empresa, una palabra del nombre o su prefijo empieza con el texto. La parte de empresa pide al menos 3 caracteres y no busca dentro del nombre: `corp` no trae todo «Betacorp».
 - **Arrastrar** una tarjeta a otra columna cambia el estado con `PATCH /api/issues/:id`, igual que el kanban nativo. El aviso ofrece «Deshacer». Si la API rechaza el cambio, la tarjeta vuelve a su lugar.
@@ -34,7 +41,7 @@ Las dos aparecen en el menú lateral de cada empresa. La interfaz está en espa�
 ### Vistas guardadas y carriles
 
 - **Pestañas de vistas** bajo la cabecera: «Todo el board», una pestaña por vista guardada (con su conteo) y «+ Guardar vista».
-  - **Guardar:** el popover propone un nombre a partir de los filtros («Bloqueadas de todas las empresas», «Lo mío · últimos 7 días») y muestra qué guarda y cuántas tareas muestra. Una vista guarda todo lo que va en la URL: filtros, Kanban o Lista, agrupación, carriles, subtareas plegadas y cerradas.
+  - **Guardar:** el popover propone un nombre a partir de los filtros («Bloqueadas de todas las empresas», «Lo mío · últimos 7 días») y muestra qué guarda y cuántas tareas (o pedidos) muestra. Una vista guarda todo lo que va en la URL: filtros, Kanban, Lista o Pedidos, agrupación, carriles, subtareas plegadas, cerradas y títulos ocultos.
   - **Abrir:** clic en la pestaña. **Renombrar:** doble clic, F2 o «⋯ › Renombrar». **Borrar:** «⋯ › Borrar vista…», con confirmación.
   - **Cambios sin guardar:** si cambias un filtro con una vista abierta, la pestaña lleva un punto y aparecen «Descartar» y «Actualizar vista».
   - Las pestañas que no caben pasan a «Más · N». La activa siempre se ve.
@@ -51,7 +58,7 @@ Todo el estado de la vista va en la URL, así que se puede guardar como marcador
 
 | Parámetro | Valores |
 |---|---|
-| `v` | `kanban` (defecto) · `lista` |
+| `v` | `kanban` (defecto) · `lista` · `pedidos` |
 | `q` | texto (ID, título o empresa) |
 | `emp` | prefijos de empresa: `ACM,GLX` |
 | `prj` | ids de proyecto; `none` = sin proyecto |
@@ -64,7 +71,8 @@ Todo el estado de la vista va en la URL, así que se puede guardar como marcador
 | `grp` | agrupación de la lista: `empresa` (defecto) · `estado` · `proyecto` · `responsable` · `prioridad` |
 | `carr` | carriles del kanban: `empresa` · `proyecto` · `responsable` (sin el parámetro, sin carriles) |
 | `sub=0` | subtareas plegadas en todas las tarjetas (sin carriles; con carriles siempre empiezan plegadas) |
-| `cerr=1` | columnas Hecha y Cancelada visibles |
+| `cerr=1` | columnas Hecha y Cancelada visibles; en Pedidos, los pedidos cerrados |
+| `ocu` | solo en Pedidos: oculta los pedidos cuyo título empieza con alguno de estos textos: `Aviso%20autom%C3%A1tico,Recordatorio` |
 
 Ejemplo: `/ACM/board-global?emp=GLX&est=blocked&pri=critical,high`
 
@@ -179,7 +187,7 @@ npx paperclipai plugin uninstall jstm.board-global --force    # borra todo, incl
 | `ui.page.register`, `ui.sidebar.register` | Las dos páginas y sus enlaces en el menú lateral. |
 
 - El plugin no llama a servicios externos: todo va a la API de tu propia instancia de Paperclip.
-- Proyectos, agentes, el Inbox («Te toca»), el Dashboard y el cambio de estado al arrastrar usan la API nativa con la sesión del usuario que mira la página. Así se aplican las mismas reglas y permisos del núcleo.
+- Proyectos, agentes, el Inbox («Te toca»), el Dashboard, el cambio de estado al arrastrar y, en la vista Pedidos, las corridas activas y el último comentario de cada pedido usan la API nativa con la sesión del usuario que mira la página. Así se aplican las mismas reglas y permisos del núcleo.
 - Las vistas guardadas son de toda la instancia: no hay vistas por usuario.
 
 ## Límites conocidos
@@ -190,6 +198,7 @@ npx paperclipai plugin uninstall jstm.board-global --force    # borra todo, incl
 - **Paginación:** cada empresa se pide completa (en Paperclip `2026.824.1`, `ctx.issues.list` con `offset` devuelve vacío). Con unas 400 tareas por empresa tarda unos 65 ms en el worker.
 - **Miga del host en el Dashboard global:** Paperclip arma la miga con el nombre del plugin, así que dice «Plugins › Board global» también en el Dashboard global.
 - **API del Dashboard:** el resumen, los runs en vivo y la actividad se leen con la API HTTP de Paperclip, no con el SDK. Si cambian en una versión nueva de Paperclip, hay que ajustar `src/ui/bridge.ts`.
+- **Vista Pedidos:** las corridas activas y el último comentario de cada pedido también se leen con la API HTTP de Paperclip (`/live-runs` y `/issues/:id/comments`), solo con la vista abierta. Las corridas se vuelven a leer cada 30 segundos; lo demás, al actualizar el board. Los comentarios se piden de a 4 y solo para los pedidos a la vista; si una lectura falla, esa fila queda sin novedad.
 - **Vistas compartidas:** «Lo mío» guarda `resp=user:local-board`. Con varios usuarios, todos verían las tareas de ese usuario.
 - **Textos de la actividad:** los eventos conocidos van en español («cambió el estado a En revisión de ACM-412»). Un evento nuevo de Paperclip aparece con su nombre técnico hasta agregarlo a `src/dashboard.ts`.
 
@@ -202,7 +211,7 @@ npm test            # pruebas de la lógica del board, del dashboard y del worke
 npm run typecheck
 ```
 
-Las pruebas cubren lo que no depende de React: estado en la URL, filtros y conteos, filtro de fecha, orden, contadores, «Te toca», árbol de subtareas, agrupación, carriles, colores de empresa, vistas guardadas y los campos que entrega el worker. En el Dashboard: totales, % de presupuesto, gráficos de 14 días, orden de la comparativa, filtro de empresa, formatos y el texto de la actividad.
+Las pruebas cubren lo que no depende de React: estado en la URL, filtros y conteos, filtro de fecha, orden, contadores, «Te toca», árbol de subtareas, agrupación, carriles, colores de empresa, vistas guardadas, la vista Pedidos (subárbol, quién tiene la pelota, búsqueda por subtarea, títulos ocultos y última novedad) y los campos que entrega el worker. En el Dashboard: totales, % de presupuesto, gráficos de 14 días, orden de la comparativa, filtro de empresa, formatos y el texto de la actividad.
 
 Paperclip sirve la interfaz desde `dist/ui/` de la carpeta instalada en cada carga de página: un build en esa carpeta cambia lo que ve el usuario aunque no ejecutes `upgrade`. Si desarrollas sobre una instancia que usas a diario, instala desde una copia aparte.
 
@@ -213,8 +222,9 @@ Paperclip sirve la interfaz desde `dist/ui/` de la carpeta instalada en cada car
 | Manifiesto | `src/manifest.ts` | Dos páginas (`board-global` y `dashboard-global`), sus enlaces en el menú lateral y los permisos. |
 | Worker | `src/worker.ts` | Dato `company-issues`: las tareas de **una** empresa con solo los campos del board. Dato `saved-views` y acciones `view-create`, `view-rename`, `view-update` y `view-delete` para las vistas guardadas, de a una operación. |
 | Lógica del Board | `src/board.ts` | URL, índice multiempresa, colores, filtros, orden, contadores, «Te toca», árbol, agrupación y carriles. Sin React. |
+| Lógica de Pedidos | `src/pedidos.ts` | Subárbol de cada tarea raíz, avance completo, quién tiene la pelota, qué pedidos se ven con cada filtro y la primera línea de un comentario. Sin React. |
 | Vistas guardadas | `src/views.ts`, `src/ui/views.tsx`, `src/ui/useSavedViews.ts` | Nombres, nombre sugerido, pestaña marcada, operaciones del worker y escrituras optimistas. |
-| Datos de la UI | `src/ui/useBoardData.ts`, `src/ui/useDashboardData.ts`, `src/ui/bridge.ts` | Carga en paralelo por empresa, reintento y cambio de estado. |
+| Datos de la UI | `src/ui/useBoardData.ts`, `src/ui/useDashboardData.ts`, `src/ui/usePedidos.ts`, `src/ui/bridge.ts` | Carga en paralelo por empresa, reintento y cambio de estado. En Pedidos, corridas activas y último comentario. |
 | Lógica del Dashboard | `src/dashboard.ts` | URL, totales, aporte por empresa, gráficos de 14 días, orden, formatos y texto de la actividad. Sin React. |
 | Interfaz | `src/ui/*.tsx`, `src/ui/styles.ts`, `src/ui/dashStyles.ts` | Componentes y hojas de estilo propias. |
 

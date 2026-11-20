@@ -30,6 +30,10 @@
 // El Dashboard global usa las mismas fuentes que el Dashboard nativo de cada
 // empresa: el resumen (`/dashboard`), las tarjetas de agentes (`/live-runs`), la
 // actividad (`/activity`) y la lista de tareas del worker.
+//
+// La vista Pedidos suma dos lecturas, solo mientras está abierta: las corridas
+// activas (`/live-runs`, para «Trabajando ahora») y el último comentario de cada
+// pedido visible (`GET /api/issues/:id/comments?limit=1`).
 import type { CreateRequest, CreatedIssue } from "../create.js";
 import {
   OPEN_STATUSES,
@@ -40,6 +44,7 @@ import {
   type BoardProject,
   type DashboardSummary,
   type IssueBlockedBy,
+  type IssueComment,
   type IssueStatus,
   type LiveRun,
 } from "../shared.js";
@@ -148,6 +153,15 @@ export function listLiveRuns(companyId: string, minCount = 4): Promise<LiveRun[]
 /** Los últimos eventos, del más nuevo al más antiguo. El Dashboard nativo muestra 10. */
 export function listActivity(companyId: string, limit = 10): Promise<ActivityEvent[]> {
   return request(`/companies/${encodeURIComponent(companyId)}/activity?limit=${limit}`);
+}
+
+/**
+ * Los últimos comentarios de una tarea, del más nuevo al más antiguo. La vista
+ * Pedidos pide solo el último de cada raíz visible («Última novedad»).
+ */
+export async function listIssueComments(issueId: string, limit = 1): Promise<IssueComment[]> {
+  const comments = await request<IssueComment[]>(`/issues/${encodeURIComponent(issueId)}/comments?limit=${limit}`);
+  return Array.isArray(comments) ? comments : [];
 }
 
 export function updateIssueStatus(issueId: string, status: IssueStatus): Promise<{ id: string; status: IssueStatus }> {
