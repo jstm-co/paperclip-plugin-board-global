@@ -183,6 +183,19 @@ export interface LiveRun {
   finishedAt: string | null;
 }
 
+/**
+ * Comentario de `GET /api/issues/:id/comments` (del más nuevo al más antiguo),
+ * con los campos que usa «Última novedad» de la vista Pedidos.
+ */
+export interface IssueComment {
+  id: string;
+  issueId: string;
+  body: string;
+  authorAgentId: string | null;
+  authorUserId: string | null;
+  createdAt: string;
+}
+
 /** Evento de `GET /api/companies/:id/activity`. */
 export interface ActivityEvent {
   id: string;

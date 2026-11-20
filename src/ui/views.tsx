@@ -4,10 +4,11 @@
 // en el servidor y las comparte toda la instancia; la vista «de origen» (para
 // «Cambios sin guardar») se recuerda en memoria, en este navegador.
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
-import { FILTER_DIMS, allBoardQuery, visibleIssues, type BoardIndex, type BoardQuery } from "../board.js";
+import { FILTER_DIMS, allBoardQuery, type BoardIndex, type BoardQuery } from "../board.js";
 import {
   VIEW_NAME_MAX,
   cleanViewName,
+  queryCount,
   suggestViewName,
   viewCount,
   viewNameError,
@@ -33,8 +34,13 @@ function summaryItems(index: BoardIndex, query: BoardQuery): Array<{ icon: IconN
   const items: Array<{ icon: IconName; text: string }> = [
     query.view === "lista"
       ? { icon: "list", text: `Lista por ${GROUP_META[query.group].label.toLowerCase()}` }
-      : { icon: "kanban", text: "Kanban" },
+      : query.view === "pedidos"
+        ? { icon: "list-tree", text: "Pedidos" }
+        : { icon: "kanban", text: "Kanban" },
   ];
+  if (query.view === "pedidos" && query.hide.length > 0) {
+    items.push({ icon: "eye-off", text: `Oculta títulos: ${query.hide.map((prefix) => `«${short(prefix, 24)}»`).join(", ")}` });
+  }
   if (query.view === "kanban" && query.lanes) items.push({ icon: "rows", text: `Carriles: ${LANE_META[query.lanes].label}` });
   if (filters.toca) items.push({ icon: "reply", text: "Te toca" });
   for (const dim of FILTER_DIMS) {
@@ -289,7 +295,7 @@ export function ViewTabs({
 
   const count = (value: number | null) =>
     value === null ? <Skeleton width={24} height={12} style={{ borderRadius: 8 }} /> : <span className="gb-n gb-tnum">{value}</span>;
-  const allCount = index ? visibleIssues(index, allBoardQuery(query), now).length : null;
+  const allCount = index ? queryCount(index, allBoardQuery(query), now) : null;
   const tabCount = (view: SavedView) => (index ? viewCount(index, view, now) : null);
 
   const allTab = (
@@ -595,7 +601,7 @@ function SaveForm({
     }
     onSave(name);
   };
-  const shown = visibleIssues(index, query, now).length;
+  const shown = queryCount(index, query, now);
   return (
     <>
       <h4>Guardar vista</h4>
@@ -652,7 +658,7 @@ function SaveForm({
       </div>
       <div className="gb-count">
         <Icon name="eye" size={12} />
-        Ahora muestra {plural(shown, "tarea", "tareas")}
+        Ahora muestra {query.view === "pedidos" ? plural(shown, "pedido", "pedidos") : plural(shown, "tarea", "tareas")}
       </div>
       <div className="gb-count is-shared">
         <Icon name="users" size={12} />

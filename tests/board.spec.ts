@@ -126,6 +126,7 @@ describe("estado en la URL", () => {
       lanes: "proyecto" as const,
       subtasksCollapsed: true,
       showClosed: true,
+      hide: [] as string[],
       filters: filters({
         emp: ["MIG", "BET"],
         prj: ["p-web"],
@@ -145,6 +146,17 @@ describe("estado en la URL", () => {
       ...query,
       filters: { ...query.filters, emp: ["BET", "MIG"], est: ["todo", "blocked"], pri: ["critical", "low"], resp: ["agent:a-dev", "none"] },
     });
+  });
+
+  it("la vista Pedidos y sus títulos ocultos viajan en la URL", () => {
+    const query = parseBoardQuery("?v=pedidos&ocu=Recordatorio,Aviso%20autom%C3%A1tico%2C%20semanal&cerr=1");
+    expect(query.view).toBe("pedidos");
+    expect(query.hide).toEqual(["Recordatorio", "Aviso automático, semanal"]);
+    // Orden estable y cada prefijo codificado por separado: la coma de un prefijo no parte la lista.
+    expect(serializeBoardQuery(query)).toBe("?v=pedidos&cerr=1&ocu=Aviso%20autom%C3%A1tico%2C%20semanal,Recordatorio");
+    expect(parseBoardQuery("").hide).toEqual([]);
+    // «Todo el board» conserva la vista y quita los títulos ocultos, como cualquier filtro.
+    expect(allBoardQuery(query)).toEqual({ ...defaultQuery(), view: "pedidos", showClosed: true });
   });
 
   it("ignora valores desconocidos", () => {

@@ -79,6 +79,16 @@ export function Header({
           <Icon name="list" size={14} />
           Lista
         </button>
+        <button
+          type="button"
+          className={cx(view === "pedidos" && "is-on")}
+          aria-pressed={view === "pedidos"}
+          title="Una fila por pedido (tarea sin padre) con el resumen de todas sus subtareas"
+          onClick={() => onView("pedidos")}
+        >
+          <Icon name="list-tree" size={14} />
+          Pedidos
+        </button>
       </div>
       <CreateHeadButton disabled={loading} />
     </div>

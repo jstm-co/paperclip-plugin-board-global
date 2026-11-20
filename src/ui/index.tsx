@@ -21,6 +21,7 @@ import {
   type GroupBy,
   type LaneBy,
 } from "../board.js";
+import { pedidoRows } from "../pedidos.js";
 import { PAGE_ROUTE, type BoardIssue, type IssueStatus } from "../shared.js";
 import { getSessionUserId } from "./bridge.js";
 import { Peek } from "./card.js";
@@ -32,9 +33,11 @@ import { KanbanBoard, KanbanSkeleton } from "./kanban.js";
 import { LaneBoard, badDropMessage, laneUiKey } from "./lanes.js";
 import { ToastStack, useToasts } from "./layer.js";
 import { ListView } from "./list.js";
+import { EmptyPedidos, PedidosView } from "./pedidos.js";
 import { EmptyResults, LoadFailed, PartialErrorBanner, TocaBanner } from "./states.js";
 import { ensureStyles } from "./styles.js";
 import { useBoardData } from "./useBoardData.js";
+import { useLiveRuns } from "./usePedidos.js";
 import { useSavedViews } from "./useSavedViews.js";
 import { ViewTabs } from "./views.js";
 
@@ -134,8 +137,9 @@ function toggleIn(set: ReadonlySet<string>, key: string): Set<string> {
 
 /**
  * Página del Board global (propuesta D de JST-9, con la Fase 2 de JST-21:
- * vistas guardadas y carriles). Todo el estado de la vista vive en la URL, así
- * que se puede guardar como marcador, compartir o guardar como vista.
+ * vistas guardadas y carriles) y sus tres vistas: Kanban, Lista y Pedidos. Todo
+ * el estado de la vista vive en la URL, así que se puede guardar como marcador,
+ * compartir o guardar como vista.
  */
 export function BoardGlobalPage({ context }: PluginPageProps) {
   useLayoutEffect(() => ensureStyles(), []);
@@ -177,6 +181,14 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
     });
     return extra.length > 0 ? [...base, ...extra] : base;
   }, [index, marks, query.filters, filterNow]);
+
+  // Vista Pedidos: una fila por tarea raíz. Las corridas activas se piden solo con la vista abierta.
+  const inPedidos = query.view === "pedidos";
+  const liveRuns = useLiveRuns(data.index, inPedidos, data.loadedAt);
+  const pedidos = useMemo(
+    () => (inPedidos && index ? pedidoRows(index, query, { live: liveRuns, now: filterNow || Date.now() }) : []),
+    [inPedidos, index, query, liveRuns, filterNow],
+  );
 
   // Estado de la vista que no va en la URL: grupos plegados, «+N más», subtareas por tarjeta.
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
@@ -233,12 +245,13 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
   useEffect(() => {
     if (!context.userId) void getSessionUserId().then(setSessionUserId);
   }, [context.userId]);
+  const userId = context.userId ?? sessionUserId;
   const retryCompany = data.retry;
   const refreshCompany = useCallback((companyId: string) => retryCompany(companyId, true), [retryCompany]);
   const create = useCreateFlow({
     index: index ?? EMPTY_INDEX,
     filters: query.filters,
-    userId: context.userId ?? sessionUserId,
+    userId,
     addIssue: data.addIssue,
     refreshCompany,
     setMark,
@@ -348,6 +361,19 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
         <KanbanSkeleton />
       ) : !index ? (
         <LoadFailed message={data.listError} onRetry={() => void data.refresh()} />
+      ) : inPedidos ? (
+        pedidos.length === 0 ? (
+          <EmptyPedidos query={query} onQuery={setQuery} />
+        ) : (
+          <PedidosView
+            index={index}
+            rows={pedidos}
+            live={liveRuns}
+            now={now}
+            userId={userId}
+            unfold={query.filters.q.trim().length > 0 || query.filters.est.length > 0}
+          />
+        )
       ) : filtered.length === 0 ? (
         <EmptyResults index={index} query={query} onFilters={setFilters} />
       ) : query.view === "lista" ? (
