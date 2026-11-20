@@ -587,6 +587,70 @@ button.gb-corow:hover .gb-bar { filter: brightness(1.15); }
 .gb-cr-newpill.is-out { background: var(--gb-muted); color: var(--gb-muted-fg); }
 .gb-cr-newpill.is-dup { background: color-mix(in srgb, var(--gb-st-todo) 18%, transparent); color: var(--gb-st-todo-text); }
 
+/* Vista Pedidos: una fila por tarea raíz con el resumen de su subárbol. Reusa .gb-list, .gb-lgrp y .gb-grph de la Lista. */
+/* La barra de Pedidos suma un campo: en pantallas medianas baja a una segunda línea en vez de cortarse. */
+.gb-filters:has(.gb-hide) { flex-wrap: wrap; }
+.gb-filters .gb-search.gb-hide { width: 250px; }
+.gb-search.gb-hide.is-active { border-color: var(--gb-border-strong); background: var(--gb-muted); }
+.gb-psec { --pc: var(--gb-muted-fg); }
+.gb-psec.is-toca { --pc: var(--gb-fg); }
+.gb-psec.is-cerrar { --pc: var(--gb-st-done); }
+.gb-psec.is-bloqueado { --pc: var(--gb-st-blocked); }
+.gb-psec.is-espera, .gb-psec.is-pausa, .gb-psec.is-sueltos { --pc: var(--gb-st-todo); }
+.gb-psec.is-trabajando, .gb-psec.is-curso { --pc: var(--gb-st-in_progress); }
+.gb-pico { color: var(--pc); }
+.gb-grph .gb-pcount { font-size: 12px; white-space: nowrap; }
+.gb-grph .gb-phint { margin-left: auto; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.gb-prow { border-bottom: 1px solid color-mix(in srgb, var(--gb-border) 70%, transparent); }
+.gb-prow:last-child { border-bottom: 0; }
+.gb-prow.is-toca { box-shadow: inset 3px 0 0 var(--gb-fg); }
+.gb-pmain { position: relative; display: grid; grid-template-columns: 20px 92px minmax(0, 1fr) minmax(150px, 230px) 190px 76px; grid-template-areas: "exp id body ball prog upd"; gap: 10px; align-items: center; min-height: 52px; padding: 7px 12px; cursor: pointer; }
+.gb-pmain:hover, .gb-pkid:hover { background: var(--gb-hover); }
+.gb-pexp { grid-area: exp; display: inline-flex; }
+.gb-pmain .gb-rid { grid-area: id; display: inline-flex; gap: 6px; align-items: center; min-width: 0; }
+.gb-pmain .gb-rid .gb-mono { font-size: 11.5px; color: var(--gb-muted-fg); white-space: nowrap; }
+.gb-pbody { grid-area: body; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gb-ptitle { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.gb-pbody .gb-tt { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.gb-pnote { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; line-height: 16px; color: var(--gb-muted-fg); }
+.gb-pnote > span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.gb-pnote b { font-weight: 500; color: var(--gb-fg); }
+.gb-pnote svg { flex: none; }
+.gb-pnote-at { flex: none; white-space: nowrap; color: var(--gb-subtle-fg); }
+.gb-pnote-at::before { content: "· "; }
+.gb-pball { grid-area: ball; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; }
+.gb-pwhat { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.gb-plink { position: relative; z-index: 1; font-size: 11.5px; text-decoration: underline; text-decoration-color: var(--gb-border-strong); text-underline-offset: 2px; }
+.gb-plink:hover { text-decoration-color: currentColor; }
+.gb-pexp .gb-tchev, .gb-pmain .gb-st, .gb-pmain .gb-cotag, .gb-pmain .gb-toca, .gb-pmain .gb-prog, .gb-pkid .gb-st, .gb-pkid .gb-toca, .gb-pkid .gb-avatar, .gb-plive { position: relative; z-index: 1; }
+.gb-pprog { grid-area: prog; display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--gb-muted-fg); min-width: 0; white-space: nowrap; }
+.gb-popen { display: inline-flex; gap: 8px; margin-left: auto; }
+.gb-popen > span { display: inline-flex; gap: 3px; align-items: center; }
+.gb-pmain .gb-upd { grid-area: upd; text-align: right; color: var(--gb-muted-fg); font-size: 12px; white-space: nowrap; }
+.gb-ptree { padding: 2px 12px 8px 42px; border-top: 1px dashed color-mix(in srgb, var(--gb-border) 70%, transparent); background: color-mix(in srgb, var(--gb-muted) 45%, transparent); }
+.gb-pkid { position: relative; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 6px 0 calc(var(--d) * 18px + 6px); font-size: 12.5px; min-width: 0; border-radius: 6px; cursor: pointer; }
+.gb-pkid .gb-kidid { font-size: 11px; color: var(--gb-muted-fg); flex: none; }
+.gb-pkid .gb-tt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.gb-pkid.is-closed .gb-tt { color: var(--gb-muted-fg); }
+.gb-pkid.is-w .gb-tt { font-weight: 600; }
+.gb-plive { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: 11px; color: var(--gb-st-in_progress); white-space: nowrap; }
+.gb-pwho { display: inline-flex; align-items: center; gap: 5px; flex: none; width: 150px; font-size: 11.5px; color: var(--gb-muted-fg); min-width: 0; }
+.gb-pwho > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gb-pkid .gb-upd { flex: none; width: 70px; text-align: right; color: var(--gb-muted-fg); font-size: 11.5px; white-space: nowrap; }
+.gb-ptree .gb-rowmore { height: 30px; padding: 0; }
+@media (max-width: 900px) {
+  .gb-pmain { grid-template-columns: 20px minmax(0, 1fr) auto; grid-template-areas: "exp id upd" "exp body body" "exp ball ball" "exp prog prog"; gap: 4px 8px; align-items: start; }
+  .gb-pexp { align-self: center; }
+  .gb-pbody .gb-tt { white-space: normal; overflow-wrap: anywhere; }
+  .gb-popen { margin-left: 8px; }
+  .gb-grph .gb-phint, .gb-pwho > span:last-child { display: none; }
+  .gb-pwho { width: auto; }
+  .gb-ptree { padding-left: 14px; }
+  .gb-pkid { padding-left: calc(var(--d) * 10px + 4px); gap: 6px; }
+  .gb-pkid .gb-upd { width: auto; }
+  .gb-filters .gb-search.gb-hide { width: 100%; }
+}
+
 @media (max-width: 640px) {
   .gb-head { flex-wrap: wrap; }
   .gb-cr-long { display: none; } .gb-cr-short { display: inline; }
@@ -595,6 +659,9 @@ button.gb-corow:hover .gb-bar { filter: brightness(1.15); }
   /* Con un compositor abierto en una columna, celda o grupo, el board deja de ser una ventana de alto fijo (en celular la cabecera se come casi todo el alto y el compositor quedaba recortado): la página crece y hace el scroll (JST-342). */
   .gb:has(.gb-cr-comp:not(.is-head)) { height: auto !important; overflow: visible; }
   .gb:has(.gb-cr-comp:not(.is-head)) :is(.gb-board, .gb-list, .gb-lanewrap) { min-height: 560px; }
+  /* En celular la cabecera, los contadores y los filtros se comen el alto y la lista de pedidos quedaba en una ventana de pocas filas: la página crece y hace el scroll, igual que con un compositor abierto. */
+  .gb:has(.gb-ped) { height: auto !important; overflow: visible; }
+  .gb-ped { overflow: visible; }
 }
 `;
 

@@ -1,7 +1,7 @@
 // Barra de filtros (§3.4): búsqueda, Proyecto · Estado · Responsable ·
 // Prioridad, «Más filtros» (Empresa, Etiqueta y Actualizada), chips y menús con
-// conteo facetado. En Kanban, «Carriles» (Fase 2, JST-21 §4.1). Todo el estado
-// vive en la URL.
+// conteo facetado. En Kanban, «Carriles» (Fase 2, JST-21 §4.1); en Pedidos,
+// «Ocultar títulos» y «Ver cerrados». Todo el estado vive en la URL.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   FILTER_DIMS,
@@ -353,6 +353,48 @@ function menuWidth(menu: MenuState): number {
 // Barra
 // ---------------------------------------------------------------------------
 
+/** Prefijos de `ocu` como los escribe la persona: separados por coma. */
+const hideText = (hide: readonly string[]) => hide.join(", ");
+const parseHide = (text: string) => [...new Set(text.split(",").map((part) => part.trim()).filter(Boolean))];
+
+/**
+ * «Ocultar títulos» de la vista Pedidos: esconde las raíces cuyo título empieza
+ * con el texto (p. ej. los avisos que crea una automatización). Con debounce,
+ * como la búsqueda; `sent` evita que la URL pise lo que se sigue escribiendo.
+ */
+function HideField({ query, onQuery }: { query: BoardQuery; onQuery: (query: BoardQuery) => void }) {
+  const current = hideText(query.hide);
+  const [draft, setDraft] = useState(current);
+  const sent = useRef(current);
+  const timer = useRef<number | undefined>(undefined);
+  const latest = useRef({ query, onQuery });
+  latest.current = { query, onQuery };
+  useEffect(() => {
+    if (current !== sent.current) {
+      sent.current = current;
+      setDraft(current);
+    }
+  }, [current]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const onChange = (value: string) => {
+    setDraft(value);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      const hide = parseHide(value);
+      sent.current = hideText(hide);
+      const { query: now, onQuery: apply } = latest.current;
+      apply({ ...now, hide });
+    }, 400);
+  };
+  const label = "Ocultar los pedidos cuyo título empieza con este texto. Separa varios con coma.";
+  return (
+    <label className={cx("gb-search", "gb-hide", query.hide.length > 0 && "is-active")} title={label}>
+      <Icon name="eye-off" size={14} />
+      <input value={draft} placeholder="Ocultar títulos que empiezan con…" aria-label={label} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
 export function FilterBar({
   index,
   query,
@@ -456,6 +498,19 @@ export function FilterBar({
             Agrupar: {GROUP_META[query.group].label}
             <Icon name="chevron-down" size={14} />
           </button>
+        ) : query.view === "pedidos" ? (
+          <>
+            <HideField query={query} onQuery={onQuery} />
+            <button
+              type="button"
+              className="gb-btn is-ghost"
+              title="Los pedidos hechos y cancelados"
+              onClick={() => onQuery({ ...query, showClosed: !query.showClosed })}
+            >
+              <Icon name={query.showClosed ? "eye-off" : "eye"} size={14} />
+              {query.showClosed ? "Ocultar cerrados" : "Ver cerrados"}
+            </button>
+          </>
         ) : (
           <>
             <button

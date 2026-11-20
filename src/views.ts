@@ -13,6 +13,7 @@ import {
   type BoardIndex,
   type BoardQuery,
 } from "./board.js";
+import { pedidoRoots } from "./pedidos.js";
 import type { IssuePriority, IssueStatus } from "./shared.js";
 
 export const VIEW_NAME_MAX = 60;
@@ -48,10 +49,15 @@ function assertName(views: readonly SavedView[], name: string, exceptId?: string
 /**
  * Lo que guarda y compara una vista: la URL sin lo que no se ve. Los carriles son
  * solo del Kanban (§4.1): en la Lista, el `carr` que queda en la URL (para volver
- * al Kanban con sus carriles) no cuenta.
+ * al Kanban con sus carriles) no cuenta. Lo mismo con los títulos ocultos
+ * (`ocu`), que son solo de Pedidos.
  */
 export function viewSearch(query: BoardQuery): string {
-  return serializeBoardQuery(query.view === "kanban" ? query : { ...query, lanes: null });
+  return serializeBoardQuery({
+    ...query,
+    lanes: query.view === "kanban" ? query.lanes : null,
+    hide: query.view === "pedidos" ? query.hide : [],
+  });
 }
 
 /** Normaliza un `search` cualquiera: así dos vistas con los mismos filtros coinciden. */
@@ -96,9 +102,14 @@ export function activeView(views: readonly SavedView[], query: BoardQuery): Save
   return views.find((view) => view.search === search) ?? null;
 }
 
-/** Conteo de la pestaña: las tareas que se ven al abrir la vista. Las vistas con fecha se cuentan respecto de `now`. */
+/** Cuántas filas muestra una consulta: tareas en Kanban y Lista, pedidos (raíces) en Pedidos. */
+export function queryCount(index: BoardIndex, query: BoardQuery, now: number = Date.now()): number {
+  return query.view === "pedidos" ? pedidoRoots(index, query, now).length : visibleIssues(index, query, now).length;
+}
+
+/** Conteo de la pestaña: lo que se ve al abrir la vista. Las vistas con fecha se cuentan respecto de `now`. */
 export function viewCount(index: BoardIndex, view: SavedView, now: number = Date.now()): number {
-  return visibleIssues(index, viewQuery(view), now).length;
+  return queryCount(index, viewQuery(view), now);
 }
 
 // ---------------------------------------------------------------------------
@@ -184,6 +195,7 @@ export function suggestViewName(index: BoardIndex, query: BoardQuery, views: rea
   }
   if (filters.act) name = name ? `${name} · últimos 7 días` : "Actualizadas en los últimos 7 días";
   if (query.view === "kanban" && query.lanes) name = name ? `${name} · por ${query.lanes}` : `Por ${query.lanes}`;
+  if (query.view === "pedidos") name = name ? `Pedidos · ${name}` : "Pedidos";
   if (!name) name = query.view === "lista" ? `Lista por ${query.group}` : "Mi vista";
 
   let out = name.slice(0, VIEW_NAME_MAX).trim();
@@ -194,7 +206,14 @@ export function suggestViewName(index: BoardIndex, query: BoardQuery, views: rea
 /** Hay algo que guardar además de lo que conserva «Todo el board». */
 export function hasViewFilters(query: BoardQuery): boolean {
   const { filters } = query;
-  return FILTER_DIMS.some((dim) => filters[dim].length > 0) || !!filters.q.trim() || filters.toca || filters.act !== null || (query.view === "kanban" && query.lanes !== null);
+  return (
+    FILTER_DIMS.some((dim) => filters[dim].length > 0) ||
+    !!filters.q.trim() ||
+    filters.toca ||
+    filters.act !== null ||
+    (query.view === "kanban" && query.lanes !== null) ||
+    (query.view === "pedidos" && query.hide.length > 0)
+  );
 }
 
 // ---------------------------------------------------------------------------
