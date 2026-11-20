@@ -9,7 +9,7 @@ A [Paperclip](https://github.com/paperclipai/paperclip) plugin that brings every
 - **Board global** (Global Board): the issues of every company and every project in one view, as a kanban, a list or by request, with filters, saved views and swimlanes.
 - **Dashboard global** (Global Dashboard): each company's Dashboard side by side, with a per-company comparison and the activity of all of them merged by date.
 
-Both pages show up in the sidebar of every company. **The interface is in Spanish**; this README quotes the on-screen labels in Spanish, with a translation the first time they appear.
+**Board global** has a button in the top bar of every page, and each page links to the other next to its title. In Paperclip's Classic workspace both pages also show up in the sidebar; the Coordinator workspace, which is the default, does not render plugin sidebar links. **The interface is in Spanish**; this README quotes the on-screen labels in Spanish, with a translation the first time they appear.
 
 - Plugin key: `jstm.board-global` · npm package: `paperclip-plugin-board-global`
 - Routes: `/<PREFIX>/board-global` and `/<PREFIX>/dashboard-global`, where `<PREFIX>` is the prefix of any company (e.g. `/ACM/board-global`).
@@ -163,7 +163,7 @@ npm run build
 npx paperclipai plugin upgrade jstm.board-global
 ```
 
-`upgrade` rejects a version that asks for new permissions. In that case, uninstall **without** `--force` and install again: Paperclip keeps the plugin's record and data, including saved views.
+`upgrade` rejects a version that asks for new permissions (it happened with the one that added the top bar button, which asks for `ui.action.register`). In that case, uninstall **without** `--force` and install again: Paperclip keeps the plugin's record and data, including saved views.
 
 ```bash
 npx paperclipai plugin uninstall jstm.board-global                # without --force
@@ -185,6 +185,7 @@ npx paperclipai plugin uninstall jstm.board-global --force    # deletes everythi
 | `issues.read` | Read each company's issues (the worker returns only the fields the board uses). |
 | `plugin.state.read`, `plugin.state.write` | Read and store saved views. This is the only thing the plugin writes. |
 | `ui.page.register`, `ui.sidebar.register` | The two pages and their sidebar links. |
+| `ui.action.register` | The «Board global» button in the top bar. |
 
 - The plugin does not call any external service: everything goes to your own Paperclip instance's API.
 - Projects, agents, the Inbox («Te toca»), the Dashboard, the status change when dragging, creating issues and, in the Pedidos view, the active runs and the last comment of each request use the built-in API with the session of the user viewing the page. That way the same core rules and permissions apply.
@@ -219,7 +220,7 @@ Paperclip serves the interface from `dist/ui/` in the installed folder on every 
 
 | Piece | File | What it does |
 |---|---|---|
-| Manifest | `src/manifest.ts` | Two pages (`board-global` and `dashboard-global`), their sidebar links and the permissions. |
+| Manifest | `src/manifest.ts` | Two pages (`board-global` and `dashboard-global`), their sidebar links, the top bar button and the permissions. |
 | Worker | `src/worker.ts` | `company-issues` data: the issues of **one** company with only the board's fields. `saved-views` data and `view-create`, `view-rename`, `view-update` and `view-delete` actions for saved views, one operation at a time. |
 | Board logic | `src/board.ts` | URL, multi-company index, colors, filters, sorting, counters, «Te toca», tree, grouping and swimlanes. No React. |
 | Pedidos logic | `src/pedidos.ts` | Subtree of each root issue, full progress, who has the ball, which requests each filter shows and the first line of a comment. No React. |

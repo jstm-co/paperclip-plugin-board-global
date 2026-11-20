@@ -81,6 +81,31 @@ export function BoardGlobalSidebarLink(_props: PluginSidebarProps) {
   );
 }
 
+/**
+ * Botón de la barra de arriba (slot `globalToolbarButton`): está en todas las
+ * páginas de todas las empresas. El menú lateral del espacio «Coordinator» no
+ * dibuja los slots `sidebar`, así que esta es la entrada que se ve siempre.
+ * Va fuera de `.gb`: toma los tokens de `.gb-layer`.
+ */
+export function BoardGlobalToolbarButton() {
+  const navigation = useHostNavigation();
+  const location = useHostLocation();
+  useLayoutEffect(() => ensureStyles(), []);
+  const active = location.pathname.replace(/\/+$/, "").endsWith(`/${PAGE_ROUTE}`);
+  return (
+    <a
+      {...navigation.linkProps(`/${PAGE_ROUTE}`)}
+      aria-current={active ? "page" : undefined}
+      aria-label="Board global"
+      title="Board global: las tareas de todas las empresas"
+      className={`gb-layer gb-tb${active ? " is-on" : ""}`}
+    >
+      <KanbanIcon />
+      <span className="gb-tb-lbl">Board global</span>
+    </a>
+  );
+}
+
 const PEEK_DELAY_MS = 450;
 
 /** Padding inferior del contenedor con scroll del host (p. ej. `md:p-6`), para que no aparezca su scroll. */
