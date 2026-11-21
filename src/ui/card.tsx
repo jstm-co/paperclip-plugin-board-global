@@ -1,7 +1,7 @@
 // Tarjeta del Board (JST-407, sobre §3.7): título primero, la línea «Te toca»
 // (§3.9), un chip de contexto y un pie con lo mínimo. Las subtareas se ven en
 // la vista previa al pasar (§3.10), no dentro de la tarjeta.
-import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import {
   WAIT_LABELS,
   ancestorsOf,
@@ -33,6 +33,7 @@ import {
 import { MarkPill, markClass, useMark } from "./create.js";
 import { Icon } from "./icons.js";
 import { Layer } from "./layer.js";
+import { useOpenTask } from "./open.js";
 
 export function hrefFor(index: BoardIndex, issue: BoardIssue): string {
   return index.waiting.get(issue.id)?.href ?? issueHref(index, issue);
@@ -110,6 +111,7 @@ export const Card = memo(function Card({ index, issue, pending = false, dragging
   const who = assigneeName(index, issue);
   const href = hrefFor(index, issue);
   const mark = useMark(issue.id);
+  const openTask = useOpenTask();
   const hot = issue.priority === "critical" || issue.priority === "high";
   return (
     <div
@@ -128,7 +130,7 @@ export const Card = memo(function Card({ index, issue, pending = false, dragging
     >
       <div className="gb-t">
         {/* Enlace normal que cubre la tarjeta (§5): sin `draggable` para que se arrastre la tarjeta. */}
-        <a className="gb-cover" href={href} draggable={false} aria-label={`${issue.identifier ?? ""} ${issue.title}`}>
+        <a className="gb-cover" href={href} draggable={false} aria-label={`${issue.identifier ?? ""} ${issue.title}`} onClick={openTask.link(issue)}>
           {issue.title}
         </a>
       </div>
@@ -173,6 +175,57 @@ export const Card = memo(function Card({ index, issue, pending = false, dragging
 
 const PEEK_WIDTH = 320;
 
+/**
+ * Qué se espera de la persona en esta tarea, o qué la tiene bloqueada. Nada si
+ * no aplica. La usan la vista previa y el modal de tarea, que suma su enlace
+ * para ir a responder (`children`).
+ */
+export function WaitNote({ index, issue, now, children }: { index: BoardIndex; issue: BoardIssue; now: number; children?: ReactNode }) {
+  const waiting = index.waiting.get(issue.id);
+  if (waiting) {
+    const unblocks = dependentsOf(index, [issue]);
+    return (
+      <div className="gb-peek-toca">
+        <TocaPill />
+        <span>
+          <b>{WAIT_LABELS[waiting.kind]}:</b> {waiting.what}
+          {waiting.since ? <span className="gb-muted"> · {relativeTime(waiting.since, now)}</span> : null}
+          {unblocks.length > 0 ? (
+            <>
+              <br />
+              <span className="gb-muted">Al responder se desbloquean {unblocks.map((u) => u.identifier).join(", ")}</span>
+            </>
+          ) : null}
+        </span>
+        {children}
+      </div>
+    );
+  }
+  const directBlocker = issue.blockerIds[0] ? index.byId.get(issue.blockerIds[0]) : undefined;
+  if (!directBlocker || !isOpenStatus(issue.status)) return null;
+  const waitBlocker = waitBlockerOf(index, issue);
+  return (
+    <div className="gb-peek-toca is-dep">
+      <Icon name="link" size={14} />
+      <span>
+        Bloqueada por <b className="gb-mono">{directBlocker.identifier}</b>
+        {waitBlocker && waitBlocker.id !== directBlocker.id ? (
+          <>
+            , que espera a <b className="gb-mono">{waitBlocker.identifier}</b>
+          </>
+        ) : null}
+        .
+        {waitBlocker ? (
+          <>
+            {" "}
+            <b>{waitBlocker.identifier}</b> espera tu respuesta.
+          </>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
 export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: BoardIssue; anchor: DOMRect; now: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(anchor.top);
@@ -186,10 +239,6 @@ export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: 
   left = Math.max(8, Math.min(left, window.innerWidth - PEEK_WIDTH - 8));
 
   const company = index.companyById.get(issue.companyId);
-  const waiting = index.waiting.get(issue.id);
-  const unblocks = waiting ? dependentsOf(index, [issue]) : [];
-  const waitBlocker = waitBlockerOf(index, issue);
-  const directBlocker = issue.blockerIds[0] ? index.byId.get(issue.blockerIds[0]) : undefined;
   const who = assigneeName(index, issue);
   const ancestors = ancestorsOf(index, issue);
   const kids = sortSubtasks(index, childrenOf(index, issue));
@@ -208,40 +257,7 @@ export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: 
           </span>
         </div>
         <div className="gb-pt">{issue.title}</div>
-        {waiting ? (
-          <div className="gb-peek-toca">
-            <TocaPill />
-            <span>
-              <b>{WAIT_LABELS[waiting.kind]}:</b> {waiting.what}
-              {waiting.since ? <span className="gb-muted"> · {relativeTime(waiting.since, now)}</span> : null}
-              {unblocks.length > 0 ? (
-                <>
-                  <br />
-                  <span className="gb-muted">Al responder se desbloquean {unblocks.map((u) => u.identifier).join(", ")}</span>
-                </>
-              ) : null}
-            </span>
-          </div>
-        ) : directBlocker && isOpenStatus(issue.status) ? (
-          <div className="gb-peek-toca is-dep">
-            <Icon name="link" size={14} />
-            <span>
-              Bloqueada por <b className="gb-mono">{directBlocker.identifier}</b>
-              {waitBlocker && waitBlocker.id !== directBlocker.id ? (
-                <>
-                  , que espera a <b className="gb-mono">{waitBlocker.identifier}</b>
-                </>
-              ) : null}
-              .
-              {waitBlocker ? (
-                <>
-                  {" "}
-                  <b>{waitBlocker.identifier}</b> espera tu respuesta.
-                </>
-              ) : null}
-            </span>
-          </div>
-        ) : null}
+        <WaitNote index={index} issue={issue} now={now} />
         <div className="gb-prow">
           <StatusIcon status={issue.status} />
           <b>{STATUS_LABELS[issue.status]}</b>
@@ -303,7 +319,7 @@ export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: 
         ) : null}
         <div className="gb-popen">
           <Icon name="external-link" size={12} />
-          Clic para abrir en {company?.name}
+          Clic para abrirla aquí · Ctrl o ⌘ + clic: su página
         </div>
       </div>
     </Layer>

@@ -5,9 +5,10 @@ import { useMemo, useState, type DragEvent } from "react";
 import { relativeTime, sortIssues, type BoardIndex } from "../board.js";
 import type { BoardIssue, IssueStatus } from "../shared.js";
 import { ContextChip, SubtaskCount, hrefFor } from "./card.js";
-import { Avatar, CompanyTag, PriorityIcon, StatusIcon, TocaPill, assigneeName, companyClass, companyStyle, cx, isOwnClick, openHref, plural } from "./common.js";
+import { Avatar, CompanyTag, PriorityIcon, StatusIcon, TocaPill, assigneeName, companyClass, companyStyle, cx, isOwnClick, plural } from "./common.js";
 import { CreateSlot, MarkPill, markClass, useMark } from "./create.js";
 import { Icon } from "./icons.js";
+import { useOpenTask } from "./open.js";
 
 const TODO_SHOWN = 8;
 const GROUP_SHOWN = 15;
@@ -201,6 +202,7 @@ function BacklogRow({
   const href = hrefFor(index, issue);
   const who = assigneeName(index, issue);
   const mark = useMark(issue.id);
+  const openTask = useOpenTask();
   const toTodo = issue.status === "backlog";
   const hot = issue.priority === "critical" || issue.priority === "high";
   const moveLabel = toTodo ? "Pasar a Por hacer" : "Devolver al Backlog";
@@ -216,7 +218,7 @@ function BacklogRow({
       }}
       onDragEnd={onDragEnd}
       onClick={(event) => {
-        if (isOwnClick(event)) openHref(href, event);
+        if (isOwnClick(event)) openTask.row(issue, href, event);
       }}
     >
       <StatusIcon status={issue.status} />
@@ -225,7 +227,7 @@ function BacklogRow({
         <span className="gb-mono">{issue.identifier}</span>
       </span>
       <span className="gb-t">
-        <a className="gb-tt gb-cover" href={href} draggable={false} title={issue.title} aria-label={`${issue.identifier ?? ""} ${issue.title}`}>
+        <a className="gb-tt gb-cover" href={href} draggable={false} title={issue.title} aria-label={`${issue.identifier ?? ""} ${issue.title}`} onClick={openTask.link(issue)}>
           {issue.title}
         </a>
         <MarkPill mark={mark} />
