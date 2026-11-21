@@ -1,37 +1,58 @@
-// Kanban con carriles (Fase 2, design-spec §4 de JST-21): una grilla carril ×
-// estado. Las columnas siguen siendo los estados; arrastrar solo cambia el
-// estado y solo dentro del mismo carril.
+// Board (JST-407, sobre los carriles de JST-21 §4): una grilla carril × columna
+// con la cabecera de cada carril arriba, a lo ancho. Las columnas son los
+// estados del Board y «Por confirmar»; arrastrar solo cambia el estado y solo
+// dentro del mismo carril. Sin agrupar es un único carril sin cabecera.
 import { useRef, useState, type CSSProperties, type DragEvent } from "react";
 import {
+  CONFIRM_COLUMN,
+  FLAT_LANE,
   NO_PROJECT,
   UNASSIGNED,
   assigneeLabel,
+  columnOf,
   hiddenLaneCount,
+  kanbanFlat,
   kanbanLanes,
-  kanbanStatuses,
   laneKeyOf,
+  type BoardColumn,
   type BoardIndex,
   type BoardQuery,
   type KanbanLane,
   type LaneBy,
 } from "../board.js";
-import { isOpenStatus, type BoardIssue, type IssueStatus } from "../shared.js";
+import type { BoardIssue, IssueStatus } from "../shared.js";
 import { Card } from "./card.js";
-import { Avatar, CompanyTag, STATUS_LABELS, StatusIcon, TocaPill, companyClass, companyStyle, cx, plural } from "./common.js";
+import { Avatar, CompanyTag, STATUS_LABELS, Skeleton, TocaPill, companyClass, companyStyle, cx, plural } from "./common.js";
 import { CreateSlot } from "./create.js";
 import { LANE_META } from "./filters.js";
 import { Icon } from "./icons.js";
-import type { KanbanUi } from "./kanban.js";
 import { Layer } from "./layer.js";
 
-/** Con carriles, 2 tarjetas por celda: así se ve más de un carril a la vez (§4.2). */
+/** Con carriles, 2 tarjetas por celda: así se ve más de un carril a la vez (§4.2). Sin agrupar hay un solo carril. */
 const PER_CELL = 2;
+const PER_CELL_FLAT = 6;
 const MORE_STEP = 20;
-// Las subtareas empiezan plegadas en todas las tarjetas y se despliegan una por
-// una (`cardToggled`); con carriles no se usa `sub` (rev 2, §4.2).
+/** Ancho mínimo de una columna: por debajo, el board se desplaza hacia el lado. */
+const MIN_COL = 216;
+const COL_GAP = 10;
 
-/** Clave de estado de la vista (carriles plegados y «+N más»): cambia con el tipo de carril. */
-export const laneUiKey = (laneBy: LaneBy, key: string) => `${laneBy}:${key}`;
+export const COLUMN_LABELS: Record<BoardColumn, string> = { ...STATUS_LABELS, [CONFIRM_COLUMN]: "Por confirmar" };
+const CONFIRM_HELP =
+  "Tareas que alguien cerró (hechas o canceladas) y todavía no confirmas. En Paperclip ya están cerradas: aquí esperan tu visto bueno.";
+
+/** Clave de estado de la vista (carriles plegados y «Ver N más»): cambia con el tipo de carril. */
+export const laneUiKey = (laneBy: LaneBy | null, key: string) => `${laneBy ?? "flat"}:${key}`;
+
+/** Carriles del Board con la consulta de ahora: por el tipo elegido, o uno solo sin agrupar. */
+export function boardLanes(
+  index: BoardIndex,
+  issues: readonly BoardIssue[],
+  laneBy: LaneBy | null,
+  columns: readonly BoardColumn[],
+  pending: ReadonlySet<string>,
+): KanbanLane[] {
+  return laneBy ? kanbanLanes(index, issues, laneBy, columns, pending) : kanbanFlat(index, issues, columns, pending);
+}
 
 function laneName(index: BoardIndex, lane: KanbanLane, laneBy: LaneBy) {
   const company = lane.companyId ? index.companyById.get(lane.companyId) : undefined;
@@ -39,7 +60,7 @@ function laneName(index: BoardIndex, lane: KanbanLane, laneBy: LaneBy) {
     return (
       <>
         <CompanyTag company={company} solid />
-        <span className="gb-t">{company?.name ?? lane.label}</span>
+        <span className="gb-nm">{company?.name ?? lane.label}</span>
       </>
     );
   }
@@ -53,7 +74,7 @@ function laneName(index: BoardIndex, lane: KanbanLane, laneBy: LaneBy) {
         ) : (
           <Avatar name={null} size={18} />
         )}
-        <span className="gb-t">{lane.label}</span>
+        <span className="gb-nm">{lane.label}</span>
       </>
     );
   }
@@ -61,14 +82,14 @@ function laneName(index: BoardIndex, lane: KanbanLane, laneBy: LaneBy) {
     return (
       <>
         <CompanyTag company={company} solid />
-        <span className="gb-t">{lane.label}</span>
+        <span className="gb-nm">{lane.label}</span>
       </>
     );
   }
   return (
     <>
       <Avatar name={assigneeLabel(index, lane.key)} size={18} />
-      <span className="gb-t">{lane.label}</span>
+      <span className="gb-nm">{lane.label}</span>
     </>
   );
 }
@@ -78,57 +99,72 @@ export function LaneBoard({
   issues,
   query,
   laneBy,
-  ui,
+  columns,
+  pending,
+  closedCount,
+  more,
   closedLanes,
   dragging,
   onToggleLane,
   onMore,
-  onToggleSubtasks,
-  onShowAllKids,
   onShowClosed,
   onDragStart,
   onDragEnd,
   onDrop,
+  onDropConfirm,
   onBadDrop,
+  onConfirm,
+  onConfirmAll,
   onPeek,
 }: {
   index: BoardIndex;
   issues: BoardIssue[];
   query: BoardQuery;
-  laneBy: LaneBy;
-  ui: KanbanUi;
+  /** `null`: sin agrupar. */
+  laneBy: LaneBy | null;
+  columns: readonly BoardColumn[];
+  /** Tareas cerradas que esperan confirmación: van en la columna «Por confirmar». */
+  pending: ReadonlySet<string>;
+  /** Hechas y canceladas ya confirmadas, con los filtros de ahora: el número del botón que las muestra. */
+  closedCount: number;
+  /** Tarjetas visibles por celda cuando se pidió «Ver N más». */
+  more: Readonly<Record<string, number>>;
   /** Carriles plegados (`laneUiKey`). En memoria: no van a la URL ni a la vista (§4.3). */
   closedLanes: ReadonlySet<string>;
   dragging: BoardIssue | null;
   onToggleLane: (key: string) => void;
   onMore: (key: string, next: number) => void;
-  onToggleSubtasks: (issueId: string) => void;
-  onShowAllKids: (issueId: string) => void;
   onShowClosed: () => void;
   onDragStart: (issue: BoardIssue) => void;
   onDragEnd: () => void;
   onDrop: (status: IssueStatus) => void;
-  /** Se soltó en otro carril: no cambia nada (§4.4). */
+  /** Una tarjeta de «Por confirmar» se soltó en «Hechas y canceladas». */
+  onDropConfirm: () => void;
+  /** Se soltó en otro carril o en «Por confirmar»: no cambia nada (§4.4). */
   onBadDrop: () => void;
+  onConfirm: (issue: BoardIssue) => void;
+  onConfirmAll: (issues: BoardIssue[]) => void;
   onPeek: (issue: BoardIssue | null, element?: HTMLElement) => void;
 }) {
   const [dropOn, setDropOn] = useState<string | null>(null);
   const badOver = useRef(false);
   const boxRef = useRef<HTMLDivElement>(null);
   const { filters } = query;
-  const statuses = kanbanStatuses(filters, query.showClosed);
-  const lanes = kanbanLanes(index, issues, laneBy, statuses);
-  const hidden = hiddenLaneCount(index, lanes, laneBy, filters.emp);
-  const meta = LANE_META[laneBy];
-  const gridStyle = { "--gcols": `170px repeat(${statuses.length}, minmax(${query.showClosed ? 200 : 150}px, 1fr))` } as CSSProperties;
-  const dragLane = dragging ? laneKeyOf(dragging, laneBy) : null;
+  const lanes = boardLanes(index, issues, laneBy, columns, pending);
+  const hidden = laneBy ? hiddenLaneCount(index, lanes, laneBy, filters.emp) : 0;
+  const meta = laneBy ? LANE_META[laneBy] : null;
+  const gridStyle = { "--gcols": `repeat(${columns.length}, minmax(0, 1fr))` } as CSSProperties;
+  const minWidth = columns.length * MIN_COL + (columns.length - 1) * COL_GAP;
+  const dragLane = dragging ? (laneBy ? laneKeyOf(dragging, laneBy) : FLAT_LANE) : null;
   const dragLaneName = dragLane ? (lanes.find((lane) => lane.key === dragLane)?.label ?? "") : "";
-  const closedCount = issues.filter((issue) => !isOpenStatus(issue.status)).length;
+  const dragPending = dragging ? pending.has(dragging.id) : false;
+  const perCell = laneBy ? PER_CELL : PER_CELL_FLAT;
+  const showRail = !query.showClosed && filters.est.length === 0;
 
-  const cellHandlers = (laneKey: string, status: IssueStatus) => {
-    const key = `${laneKey}|${status}`;
-    if (dragLane !== null && laneKey !== dragLane) {
-      // Otro carril: sin `preventDefault`, el navegador muestra «no permitido».
+  const cellHandlers = (laneKey: string, column: BoardColumn) => {
+    const key = `${laneKey}|${column}`;
+    if (column === CONFIRM_COLUMN || (dragLane !== null && laneKey !== dragLane)) {
+      // Otro carril o «Por confirmar»: sin `preventDefault`, el navegador muestra «no permitido».
       return {
         onDragOver: () => {
           badOver.current = true;
@@ -151,7 +187,7 @@ export function LaneBoard({
         event.preventDefault();
         setDropOn(null);
         badOver.current = false;
-        if (dragging) onDrop(status);
+        if (dragging) onDrop(column);
       },
     };
   };
@@ -160,35 +196,34 @@ export function LaneBoard({
   const hintLeft = box ? box.left + box.width / 2 : undefined;
 
   return (
-    <div className="gb-lanewrap">
-      <div
-        ref={boxRef}
-        className={cx("gb-lanes", dragLane !== null && "is-dragging")}
-        onDragEnd={(event) => {
-          setDropOn(null);
-          if (badOver.current && event.dataTransfer.dropEffect === "none") onBadDrop();
-          badOver.current = false;
-        }}
-      >
+    <div
+      className="gb-lanewrap"
+      onDragEnd={(event) => {
+        setDropOn(null);
+        if (badOver.current && event.dataTransfer.dropEffect === "none") onBadDrop();
+        badOver.current = false;
+      }}
+    >
+      <div ref={boxRef} className={cx("gb-lanes", dragLane !== null && "is-dragging")} style={{ "--gminw": `${minWidth}px` } as CSSProperties}>
         <div className="gb-grid gb-lhead" style={gridStyle}>
-          <div className="gb-corner">
-            <Icon name={meta.icon} size={12} />
-            {lanes.length} {lanes.length === 1 ? meta.label.toLowerCase() : meta.plural}
-          </div>
-          {statuses.map((status) => {
-            const items = issues.filter((issue) => issue.status === status);
-            const hot = items.filter((issue) => issue.priority === "critical" || issue.priority === "high").length;
+          {columns.map((column) => {
+            const items = issues.filter((issue) => columnOf(issue, pending) === column);
             return (
-              <div key={status} className="gb-colh" data-s={status}>
-                <StatusIcon status={status} />
-                <span className="gb-name">{STATUS_LABELS[status]}</span>
-                {hot > 0 && isOpenStatus(status) ? (
-                  <span className="gb-hot" title={`${hot} de prioridad crítica o alta`}>
-                    <Icon name="arrow-up" size={12} />
-                    {hot}
-                  </span>
-                ) : null}
+              <div key={column} className="gb-colh" data-s={column} title={column === CONFIRM_COLUMN ? CONFIRM_HELP : undefined}>
+                <span className="gb-name">{COLUMN_LABELS[column]}</span>
                 <span className="gb-cnt gb-tnum">{items.length}</span>
+                {column === CONFIRM_COLUMN && items.length > 1 ? (
+                  <button
+                    type="button"
+                    className="gb-colact"
+                    title={`Confirmar las ${items.length} de una vez`}
+                    aria-label={`Confirmar las ${items.length} tareas de «Por confirmar»`}
+                    onClick={() => onConfirmAll(items)}
+                  >
+                    <Icon name="check" size={12} />
+                    Todas
+                  </button>
+                ) : null}
               </div>
             );
           })}
@@ -196,104 +231,98 @@ export function LaneBoard({
 
         {lanes.map((lane) => {
           const uiKey = laneUiKey(laneBy, lane.key);
-          const closed = closedLanes.has(uiKey);
+          const closed = laneBy !== null && closedLanes.has(uiKey);
           const company = lane.companyId ? index.companyById.get(lane.companyId) : undefined;
           const toca = lane.cells.reduce((sum, cell) => sum + cell.issues.filter((issue) => index.waiting.has(issue.id)).length, 0);
           const agentCompany =
             laneBy === "responsable" && lane.key.startsWith("agent:")
               ? index.companyById.get(index.agentById.get(lane.key.slice("agent:".length))?.companyId ?? "")
               : undefined;
+          const label = laneBy ? lane.label : "Board";
           return (
             <section
               key={lane.key}
               className={cx(
-                "gb-grid",
                 "gb-lane",
                 closed && "is-closed",
+                !laneBy && "is-flat",
                 company ? companyClass(company) : "is-nocol",
                 dragLane !== null && (lane.key === dragLane ? "is-src" : "is-other"),
               )}
-              style={{ ...gridStyle, ...companyStyle(company) }}
-              aria-label={lane.label}
+              style={companyStyle(company)}
+              aria-label={label}
             >
-              <button
-                type="button"
-                className="gb-llabel"
-                aria-expanded={!closed}
-                title={`${closed ? "Desplegar" : "Plegar"} el carril`}
-                onClick={() => onToggleLane(uiKey)}
-              >
-                <span className="gb-nm">
-                  <span className="gb-chev">
-                    <Icon name="chevron-down" size={12} />
-                  </span>
-                  {laneName(index, lane, laneBy)}
-                </span>
-                <span className="gb-meta">
-                  {agentCompany ? <CompanyTag company={agentCompany} /> : null}
-                  {plural(lane.total, "tarea", "tareas")}
-                  {toca > 0 ? <TocaPill label={`Te toca ${toca}`} small /> : null}
-                </span>
-              </button>
-              {lane.cells.map((cell) => {
-                if (closed) {
-                  return (
-                    <div key={cell.status} className="gb-lcnt" data-s={cell.status}>
-                      {cell.issues.length > 0 ? (
-                        <>
-                          <StatusIcon status={cell.status} size={12} />
-                          <b className="gb-tnum">{cell.issues.length}</b>
-                        </>
-                      ) : (
-                        <span className="gb-zero">—</span>
-                      )}
-                    </div>
-                  );
-                }
-                const moreKey = `ln:${uiKey}:${cell.status}`;
-                const limit = ui.more[moreKey] ?? PER_CELL;
-                const same = dragLane === null || lane.key === dragLane;
-                return (
-                  <div
-                    key={cell.status}
-                    className={cx(
-                      "gb-cell",
-                      dragLane !== null && (same ? "is-ok" : "is-nodrop"),
-                      dropOn === `${lane.key}|${cell.status}` && "gb-drop-on",
-                    )}
-                    data-s={cell.status}
-                    aria-label={`${lane.label} · ${STATUS_LABELS[cell.status]}`}
-                    {...cellHandlers(lane.key, cell.status)}
+              {laneBy ? (
+                <div className="gb-lanehead">
+                  <button
+                    type="button"
+                    className="gb-lanebtn"
+                    aria-expanded={!closed}
+                    title={`${closed ? "Desplegar" : "Plegar"} el carril`}
+                    onClick={() => onToggleLane(uiKey)}
                   >
-                    {cell.issues.slice(0, limit).map((issue) => (
-                      <Card
-                        key={issue.id}
-                        index={index}
-                        issue={issue}
-                        subtasksOpen={ui.cardToggled.has(issue.id)}
-                        showAllKids={ui.kidsAll.has(issue.id)}
-                        dragging={dragging?.id === issue.id}
-                        onToggleSubtasks={onToggleSubtasks}
-                        onShowAllKids={onShowAllKids}
-                        onDragStart={onDragStart}
-                        onDragEnd={onDragEnd}
-                        onPeek={onPeek}
-                      />
-                    ))}
-                    {cell.issues.length > limit ? (
-                      <button type="button" className="gb-more" onClick={() => onMore(moreKey, limit + MORE_STEP)}>
-                        +{cell.issues.length - limit} más
-                      </button>
-                    ) : null}
-                    <CreateSlot origin={{ surface: "cell", status: cell.status, by: laneBy, key: lane.key }} />
-                  </div>
-                );
-              })}
+                    <span className="gb-chev">
+                      <Icon name="chevron-down" size={14} />
+                    </span>
+                    {laneName(index, lane, laneBy)}
+                    {agentCompany ? <CompanyTag company={agentCompany} /> : null}
+                    <span className="gb-meta">{plural(lane.total, "tarea", "tareas")}</span>
+                    {toca > 0 ? <TocaPill label={`Te toca ${toca}`} small /> : null}
+                  </button>
+                </div>
+              ) : null}
+              {closed ? null : (
+                <div className="gb-grid" style={gridStyle}>
+                  {lane.cells.map((cell) => {
+                    const moreKey = `ln:${uiKey}:${cell.status}`;
+                    const limit = more[moreKey] ?? perCell;
+                    const isConfirm = cell.status === CONFIRM_COLUMN;
+                    const same = !isConfirm && (dragLane === null || lane.key === dragLane);
+                    return (
+                      <div
+                        key={cell.status}
+                        className={cx(
+                          "gb-cell",
+                          dragLane !== null && (same ? "is-ok" : "is-nodrop"),
+                          dropOn === `${lane.key}|${cell.status}` && "gb-drop-on",
+                        )}
+                        data-s={cell.status}
+                        aria-label={`${label} · ${COLUMN_LABELS[cell.status]}`}
+                        {...cellHandlers(lane.key, cell.status)}
+                      >
+                        {cell.issues.slice(0, limit).map((issue) => (
+                          <Card
+                            key={issue.id}
+                            index={index}
+                            issue={issue}
+                            pending={isConfirm}
+                            dragging={dragging?.id === issue.id}
+                            onConfirm={onConfirm}
+                            onDragStart={onDragStart}
+                            onDragEnd={onDragEnd}
+                            onPeek={onPeek}
+                          />
+                        ))}
+                        {cell.issues.length > limit ? (
+                          <button type="button" className="gb-more" onClick={() => onMore(moreKey, limit + MORE_STEP)}>
+                            Ver {cell.issues.length - limit} más
+                          </button>
+                        ) : null}
+                        {cell.status === CONFIRM_COLUMN ? null : (
+                          <CreateSlot
+                            origin={laneBy ? { surface: "cell", status: cell.status, by: laneBy, key: lane.key } : { surface: "cell", status: cell.status }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           );
         })}
 
-        {hidden > 0 ? (
+        {hidden > 0 && meta ? (
           <div className="gb-lnote">
             <Icon name="info" size={12} />
             {hidden === 1
@@ -302,25 +331,52 @@ export function LaneBoard({
           </div>
         ) : null}
       </div>
-      {query.showClosed || filters.est.length > 0 ? null : (
-        <button type="button" className="gb-closedtoggle" onClick={onShowClosed} title="Mostrar las columnas Hecha y Cancelada">
-          <Icon name="eye" size={14} />
-          Hechas y canceladas · {closedCount}
+      {showRail ? (
+        <button
+          type="button"
+          className={cx("gb-closedtoggle", dragPending && "is-drop", dropOn === "rail" && "gb-drop-on")}
+          onClick={onShowClosed}
+          title={dragPending ? "Suelta aquí para confirmarla" : "Mostrar las columnas Hecha y Cancelada"}
+          onDragOver={(event) => {
+            if (!dragPending) {
+              badOver.current = true;
+              return;
+            }
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            badOver.current = false;
+            if (dropOn !== "rail") setDropOn("rail");
+          }}
+          onDragLeave={() => setDropOn((current) => (current === "rail" ? null : current))}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDropOn(null);
+            badOver.current = false;
+            if (dragPending) onDropConfirm();
+          }}
+        >
+          <Icon name={dragPending ? "check" : "eye"} size={14} />
+          {dragPending ? "Suelta aquí para confirmar" : `Hechas y canceladas · ${closedCount}`}
         </button>
-      )}
+      ) : null}
 
-      {dragLane !== null ? (
+      {dragLane !== null && (dragPending || laneBy) ? (
         <Layer>
           <div className="gb-draghint" style={hintLeft === undefined ? undefined : { left: hintLeft }} role="status">
-            <Icon name="lock" size={14} />
+            <Icon name={dragPending ? "check" : "lock"} size={14} />
             <span>
-              {laneBy === "empresa" ? (
+              {dragPending ? (
+                <>
+                  Suéltala en <b>{showRail ? "Hechas y canceladas" : COLUMN_LABELS[dragging!.status]}</b> para confirmarla, o en una columna abierta para
+                  reabrirla.
+                </>
+              ) : laneBy === "empresa" ? (
                 <>
                   Suelta en una columna de <b>{dragLaneName}</b>. Una tarea no puede pasar a otra empresa.
                 </>
               ) : (
                 <>
-                  Suelta dentro de <b>{dragLaneName}</b>. Arrastrar cambia el estado, no {meta.what}.
+                  Suelta dentro de <b>{dragLaneName}</b>. Arrastrar cambia el estado, no {meta?.what}.
                 </>
               )}
             </span>
@@ -331,9 +387,56 @@ export function LaneBoard({
   );
 }
 
-/** Toast al soltar en otro carril (§4.4). */
-export function badDropMessage(laneBy: LaneBy): string {
+/** Toast al soltar donde no se puede: otro carril (§4.4) o la columna «Por confirmar». */
+export function badDropMessage(laneBy: LaneBy | null): string {
+  if (!laneBy) return "Ahí no se puede soltar: «Por confirmar» se llena sola con lo que se cierra.";
   return laneBy === "empresa"
     ? "Solo se suelta dentro de su empresa: una tarea no puede pasar a otra."
     : `Solo se suelta dentro del mismo carril. Para cambiar ${LANE_META[laneBy].what}, abre la tarea.`;
+}
+
+/** Esqueleto de carga: las columnas del Board y dos carriles con tarjetas (§4.1). */
+export function BoardSkeleton() {
+  const gridStyle = { "--gcols": "repeat(4, minmax(0, 1fr))" } as CSSProperties;
+  return (
+    <div className="gb-lanewrap" aria-busy="true" aria-label="Cargando tareas">
+      <div className="gb-lanes" style={{ "--gminw": "0px" } as CSSProperties}>
+        <div className="gb-grid gb-lhead" style={gridStyle}>
+          {[0, 1, 2, 3].map((column) => (
+            <div key={column} className="gb-colh">
+              <Skeleton width={84} height={10} />
+            </div>
+          ))}
+        </div>
+        {[
+          [2, 1, 1, 2],
+          [1, 2, 0, 2],
+        ].map((cells, lane) => (
+          <section key={lane} className="gb-lane is-nocol">
+            <div className="gb-lanehead">
+              <span className="gb-lanebtn" style={{ cursor: "default" }}>
+                <Skeleton width={150} height={12} />
+              </span>
+            </div>
+            <div className="gb-grid" style={gridStyle}>
+              {cells.map((count, column) => (
+                <div key={column} className="gb-cell">
+                  {Array.from({ length: count }, (_, i) => (
+                    <div key={i} className="gb-card" style={{ cursor: "default" }}>
+                      <Skeleton width={`${92 - ((i + column) % 3) * 12}%`} height={10} />
+                      <Skeleton width="58%" height={10} style={{ marginTop: 7 }} />
+                      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                        <Skeleton width={64} height={9} />
+                        <Skeleton width={20} height={20} style={{ marginLeft: "auto", borderRadius: 10 }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
 }

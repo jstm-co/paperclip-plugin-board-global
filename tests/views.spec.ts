@@ -146,10 +146,13 @@ describe("vistas guardadas", () => {
 describe("pestaña marcada y «Cambios sin guardar»", () => {
   const views = sample();
 
-  it("«Todo el board» es sin filtros ni carriles, aunque cambien la vista, la agrupación, las subtareas o las cerradas", () => {
+  it("«Todo el board» es sin filtros y agrupado por empresa, aunque cambien la vista, la agrupación de la lista, las subtareas o las cerradas", () => {
     expect(viewState(views, defaultQuery(), null)).toEqual({ kind: "all" });
     expect(viewState(views, parseBoardQuery("?v=lista&grp=proyecto&sub=0&cerr=1"), null)).toEqual({ kind: "all" });
-    expect(viewState(views, parseBoardQuery("?carr=empresa"), null)).toEqual({ kind: "unsaved" });
+    expect(viewState(views, parseBoardQuery("?v=backlog"), null)).toEqual({ kind: "all" });
+    expect(viewState(views, parseBoardQuery("?carr=empresa"), null)).toEqual({ kind: "all" });
+    expect(viewState(views, parseBoardQuery("?carr=proyecto"), null)).toEqual({ kind: "unsaved" });
+    expect(viewState(views, parseBoardQuery("?carr=no"), null)).toEqual({ kind: "unsaved" });
   });
 
   it("en la Lista, el `carr` que queda del Kanban no cuenta (JST-26)", () => {
@@ -161,7 +164,7 @@ describe("pestaña marcada y «Cambios sin guardar»", () => {
     expect(viewState([...views, enLista], lista, null)).toEqual({ kind: "view", view: enLista });
     expect(activeView([...views, enLista], parseBoardQuery("?v=lista&est=blocked&carr=proyecto"))).toBeNull();
     // De vuelta en el Kanban, los carriles vuelven a contar.
-    expect(viewState([...views, enLista], parseBoardQuery("?carr=empresa"), null)).toEqual({ kind: "unsaved" });
+    expect(viewState([...views, enLista], parseBoardQuery("?carr=proyecto"), null)).toEqual({ kind: "unsaved" });
   });
 
   it("si la URL coincide con una vista, esa queda marcada", () => {
@@ -220,7 +223,10 @@ describe("nombre sugerido", () => {
 
   it("fecha y carriles se agregan al final; solos tienen su propio nombre", () => {
     expect(suggest("?act=7d")).toBe("Actualizadas en los últimos 7 días");
-    expect(suggest("?carr=empresa")).toBe("Por empresa");
+    expect(suggest("?carr=proyecto")).toBe("Por proyecto");
+    expect(suggest("?carr=no")).toBe("Sin agrupar");
+    expect(suggest("?est=blocked&carr=no")).toBe("Bloqueadas de todas las empresas · sin agrupar");
+    expect(suggest("?v=backlog")).toBe("Backlog");
     expect(suggest("?est=blocked&carr=responsable")).toBe("Bloqueadas de todas las empresas · por responsable");
     // En la Lista no hay carriles.
     expect(suggest("?v=lista&carr=empresa")).toBe("Lista por empresa");
@@ -262,8 +268,10 @@ describe("vistas en el servidor", () => {
     expect(created).toEqual({ ok: true, views: [{ id: "v1", name: "Bloqueadas", search: "?est=blocked", createdAt: NOW }] });
     const renamed = applyViewOp(created.views, { op: "rename", id: "v1", name: "Bloqueadas de todas" });
     expect(renamed.ok && renamed.views[0].name).toBe("Bloqueadas de todas");
-    const updated = applyViewOp(renamed.views, { op: "update", id: "v1", search: "?carr=empresa&est=blocked" });
-    expect(updated.ok && updated.views[0].search).toBe("?est=blocked&carr=empresa");
+    const updated = applyViewOp(renamed.views, { op: "update", id: "v1", search: "?carr=responsable&est=blocked" });
+    expect(updated.ok && updated.views[0].search).toBe("?est=blocked&carr=responsable");
+    // Una vista guardada antes de JST-407 con `carr=empresa` queda igual a la de siempre: por empresa.
+    expect(normalizeSearch("?est=blocked&carr=empresa")).toBe("?est=blocked");
     expect(applyViewOp(updated.views, { op: "delete", id: "v1" })).toEqual({ ok: true, views: [] });
   });
 

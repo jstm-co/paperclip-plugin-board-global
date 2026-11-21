@@ -52,6 +52,17 @@ export const VIEW_ACTIONS = {
   delete: "view-delete",
 } as const;
 
+/**
+ * «Por confirmar» (JST-407): qué tareas cerradas ya revisó la persona. Igual que
+ * las vistas, vive en `ctx.state` de alcance `instance`: un dato para leer y
+ * una acción por operación.
+ */
+export const DATA_CONFIRMATIONS = "confirmations";
+export const CONFIRM_ACTIONS = {
+  confirm: "confirm-add",
+  unconfirm: "confirm-remove",
+} as const;
+
 export interface BoardLabel {
   id: string;
   name: string;
@@ -81,6 +92,8 @@ export interface BoardIssue {
   /** Fecha de creación: el gráfico «Tareas por estado» del Dashboard cuenta por día de creación. */
   createdAt: string;
   updatedAt: string;
+  /** Cuándo se cerró (hecha o cancelada); `null` en las abiertas. La usa «Por confirmar». */
+  closedAt?: string | null;
 }
 
 export interface BoardProject {

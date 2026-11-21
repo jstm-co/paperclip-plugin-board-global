@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildBoardIndex, companyPaletteKeys, withBlockedBy, type BoardIndex } from "../board.js";
 import { insertIssue } from "../create.js";
-import { DATA_COMPANY_ISSUES, type BoardIssue, type CompanyBoard, type CompanyIssues, type IssueStatus } from "../shared.js";
+import { DATA_COMPANY_ISSUES, isOpenStatus, type BoardIssue, type CompanyBoard, type CompanyIssues, type IssueStatus } from "../shared.js";
 import {
   getCompanyData,
   listAgents,
@@ -53,6 +53,7 @@ function loadOne(company: CompanyRef): Promise<CompanyLoad> {
 
 function setStatus(loads: Record<string, CompanyLoad>, issueId: string, status: IssueStatus): Record<string, CompanyLoad> {
   const next = { ...loads };
+  const at = new Date().toISOString();
   for (const [companyId, load] of Object.entries(loads)) {
     if (!load.board?.issues.some((issue) => issue.id === issueId)) continue;
     next[companyId] = {
@@ -60,7 +61,8 @@ function setStatus(loads: Record<string, CompanyLoad>, issueId: string, status: 
       board: {
         ...load.board,
         issues: load.board.issues.map((issue) =>
-          issue.id === issueId ? { ...issue, status, updatedAt: new Date().toISOString() } : issue,
+          // `closedAt` acompaña al estado: «Por confirmar» (JST-407) compara contra esa hora.
+          issue.id === issueId ? { ...issue, status, updatedAt: at, closedAt: isOpenStatus(status) ? null : at } : issue,
         ),
       },
     };

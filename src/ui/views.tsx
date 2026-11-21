@@ -4,7 +4,7 @@
 // en el servidor y las comparte toda la instancia; la vista «de origen» (para
 // «Cambios sin guardar») se recuerda en memoria, en este navegador.
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
-import { FILTER_DIMS, allBoardQuery, type BoardIndex, type BoardQuery } from "../board.js";
+import { DEFAULT_LANES, FILTER_DIMS, allBoardQuery, type BoardIndex, type BoardQuery } from "../board.js";
 import {
   VIEW_NAME_MAX,
   cleanViewName,
@@ -28,7 +28,7 @@ import type { SavedViews } from "./useSavedViews.js";
 
 const short = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 
-/** «Qué guarda» la vista (§3.4): Kanban · Carriles: Empresa · Prioridad: Crítica, Alta… */
+/** «Qué guarda» la vista (§3.4): Board · Agrupado por proyecto · Prioridad: Crítica, Alta… */
 function summaryItems(index: BoardIndex, query: BoardQuery): Array<{ icon: IconName; text: string }> {
   const { filters } = query;
   const items: Array<{ icon: IconName; text: string }> = [
@@ -36,12 +36,16 @@ function summaryItems(index: BoardIndex, query: BoardQuery): Array<{ icon: IconN
       ? { icon: "list", text: `Lista por ${GROUP_META[query.group].label.toLowerCase()}` }
       : query.view === "pedidos"
         ? { icon: "list-tree", text: "Pedidos" }
-        : { icon: "kanban", text: "Kanban" },
+        : query.view === "backlog"
+          ? { icon: "layers", text: "Backlog" }
+          : { icon: "kanban", text: "Board" },
   ];
   if (query.view === "pedidos" && query.hide.length > 0) {
     items.push({ icon: "eye-off", text: `Oculta títulos: ${query.hide.map((prefix) => `«${short(prefix, 24)}»`).join(", ")}` });
   }
-  if (query.view === "kanban" && query.lanes) items.push({ icon: "rows", text: `Carriles: ${LANE_META[query.lanes].label}` });
+  if (query.view === "kanban" && query.lanes !== DEFAULT_LANES) {
+    items.push({ icon: "rows", text: query.lanes ? `Agrupado por ${LANE_META[query.lanes].label.toLowerCase()}` : "Sin agrupar" });
+  }
   if (filters.toca) items.push({ icon: "reply", text: "Te toca" });
   for (const dim of FILTER_DIMS) {
     const values = filters[dim] as readonly string[];
@@ -51,7 +55,6 @@ function summaryItems(index: BoardIndex, query: BoardQuery): Array<{ icon: IconN
   }
   if (filters.act) items.push({ icon: "clock", text: "Actualizada: últimos 7 días" });
   if (filters.q.trim()) items.push({ icon: "search", text: `«${filters.q.trim()}»` });
-  if (query.subtasksCollapsed) items.push({ icon: "list-tree", text: "Subtareas plegadas" });
   if (query.showClosed) items.push({ icon: "eye", text: "Con hechas y canceladas" });
   return items;
 }
@@ -605,7 +608,7 @@ function SaveForm({
   return (
     <>
       <h4>Guardar vista</h4>
-      <p className="gb-dsub">Guarda los filtros, la vista y los carriles de ahora para volver con un clic.</p>
+      <p className="gb-dsub">Guarda los filtros, la vista y la agrupación de ahora para volver con un clic.</p>
       <div className="gb-field">
         <label htmlFor="gb-view-name">Nombre</label>
         <input

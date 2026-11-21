@@ -1,6 +1,15 @@
 import { definePlugin, runWorker } from "@paperclipai/plugin-sdk";
 import type { Issue, PluginContext } from "@paperclipai/plugin-sdk";
-import { DATA_COMPANY_ISSUES, DATA_SAVED_VIEWS, VIEW_ACTIONS, type BoardIssue, type CompanyIssues } from "./shared.js";
+import { CONFIRM_STATE_KEY, applyConfirmOp, initialConfirmations, parseConfirmIds, parseConfirmations, type Confirmations } from "./confirm.js";
+import {
+  CONFIRM_ACTIONS,
+  DATA_COMPANY_ISSUES,
+  DATA_CONFIRMATIONS,
+  DATA_SAVED_VIEWS,
+  VIEW_ACTIONS,
+  type BoardIssue,
+  type CompanyIssues,
+} from "./shared.js";
 import { VIEWS_STATE_KEY, applyViewOp, parseStoredViews, parseViewOp, storedViews, type SavedView, type ViewOp, type ViewOpResult } from "./views.js";
 
 function requireCompanyId(value: unknown): string {
@@ -40,6 +49,7 @@ export function toBoardIssue(issue: Issue): BoardIssue {
     blockerIds: blockerIds(issue),
     createdAt: toIso(issue.createdAt),
     updatedAt: toIso(issue.updatedAt),
+    closedAt: toIso(issue.status === "cancelled" ? issue.cancelledAt : issue.status === "done" ? issue.completedAt : null) || null,
   };
 }
 
@@ -79,9 +89,51 @@ function registerSavedViews(ctx: PluginContext) {
   }
 }
 
+const CONFIRM_SCOPE = { scopeKind: "instance", stateKey: CONFIRM_STATE_KEY } as const;
+
+/**
+ * «Por confirmar» (JST-407) en `ctx.state` (alcance instance), con la misma
+ * cola que las vistas. La primera lectura fija desde cuándo se piden
+ * confirmaciones, para que la columna no arranque con todo el historial.
+ */
+function registerConfirmations(ctx: PluginContext) {
+  let queue: Promise<unknown> = Promise.resolve();
+  const serialized = <T>(fn: () => Promise<T>): Promise<T> => {
+    const run = queue.then(fn, fn);
+    queue = run.catch(() => undefined);
+    return run;
+  };
+  const write = async (state: Confirmations) => {
+    // Mismo cuidado que con las vistas: borrar antes deja siempre una sola fila.
+    await ctx.state.delete(CONFIRM_SCOPE);
+    await ctx.state.set(CONFIRM_SCOPE, state);
+  };
+  const read = async (): Promise<Confirmations> => {
+    const stored = parseConfirmations(await ctx.state.get(CONFIRM_SCOPE));
+    if (stored) return stored;
+    const initial = initialConfirmations(Date.now());
+    await write(initial);
+    return initial;
+  };
+
+  ctx.data.register(DATA_CONFIRMATIONS, async (): Promise<Confirmations> => serialized(read));
+
+  for (const op of Object.keys(CONFIRM_ACTIONS) as Array<keyof typeof CONFIRM_ACTIONS>) {
+    ctx.actions.register(CONFIRM_ACTIONS[op], async (params): Promise<Confirmations> => {
+      const ids = parseConfirmIds(params);
+      return serialized(async () => {
+        const next = applyConfirmOp(await read(), op, ids, Date.now());
+        await write(next);
+        return next;
+      });
+    });
+  }
+}
+
 const plugin = definePlugin({
   async setup(ctx) {
     registerSavedViews(ctx);
+    registerConfirmations(ctx);
 
     // `params.companyId` lo inyecta el host: es la empresa autorizada para esta
     // invocación. Leer otra empresa aquí lo rechaza el host (INVOCATION_SCOPE_DENIED).
