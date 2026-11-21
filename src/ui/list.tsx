@@ -16,8 +16,10 @@ import {
   type TreeRow,
 } from "../board.js";
 import { canCreateIn, type CreateOrigin } from "../create.js";
+import { t } from "../i18n.js";
 import { OPEN_STATUSES, isOpenStatus, type BoardIssue, type IssuePriority, type IssueStatus } from "../shared.js";
 import { hrefFor } from "./card.js";
+import { useOpenTask } from "./open.js";
 import {
   Avatar,
   CompanyTag,
@@ -32,7 +34,6 @@ import {
   companyStyle,
   cx,
   isOwnClick,
-  openHref,
   plural,
 } from "./common.js";
 import { CreateSlot, MarkPill, markClass, useMark } from "./create.js";
@@ -204,7 +205,7 @@ function ListGroup({
         <span className="gb-muted" style={{ fontSize: 12 }}>
           {plural(group.issues.length, "tarea", "tareas")}
         </span>
-        {tocaCount > 0 ? <TocaPill small label={`${tocaCount} te ${tocaCount === 1 ? "toca" : "tocan"}`} /> : null}
+        {tocaCount > 0 ? <TocaPill small label={tocaCount === 1 ? t("{n} te toca", { n: tocaCount }) : t("{n} te tocan", { n: tocaCount })} /> : null}
         <span className="gb-stc">
           {openCounts.map(({ status, count }) => (
             <span key={status} title={LABELS.status[status]}>
@@ -212,7 +213,7 @@ function ListGroup({
               <span className="gb-tnum">{count}</span>
             </span>
           ))}
-          <span title="Hechas y canceladas">
+          <span title={t("Hechas y canceladas")}>
             <StatusIcon status="done" size={12} />
             <span className="gb-tnum">{closedCount}</span>
           </span>
@@ -234,7 +235,7 @@ function ListGroup({
           {rows.length > limit ? (
             <div className="gb-rowmore">
               <button type="button" className="gb-linkbtn" onClick={() => onMore(limit + MORE_STEP)}>
-                Ver {Math.min(MORE_STEP, rows.length - limit)} más · quedan {rows.length - limit}
+                {t("Ver {n} más · quedan {left}", { n: Math.min(MORE_STEP, rows.length - limit), left: rows.length - limit })}
               </button>
             </div>
           ) : null}
@@ -254,7 +255,7 @@ function TreeCell({ row, onToggle }: { row: TreeRow; onToggle: (issueId: string)
           type="button"
           className={cx("gb-tchev", !row.open && "is-closed")}
           aria-expanded={row.open}
-          aria-label={`${row.open ? "Plegar" : "Desplegar"} subtareas`}
+          aria-label={row.open ? t("Plegar subtareas") : t("Desplegar subtareas")}
           onClick={() => onToggle(row.issue.id)}
         >
           <Icon name="chevron-down" size={12} />
@@ -285,13 +286,14 @@ function ListRow({
   const progress = progressOf(index, issue);
   const who = assigneeName(index, issue);
   const mark = useMark(issue.id);
+  const openTask = useOpenTask();
   return (
     <div
       data-iid={issue.id}
       className={cx("gb-row", markClass(mark), tree?.context && "gb-ctx", index.waiting.has(issue.id) && "is-w")}
       onClick={(event) => {
         // El enlace cubre la fila; esto cubre los iconos que quedan encima para mostrar su título.
-        if (isOwnClick(event)) openHref(href, event);
+        if (isOwnClick(event)) openTask.row(issue, href, event);
       }}
     >
       <StatusIcon status={issue.status} />
@@ -306,6 +308,7 @@ function ListRow({
           href={href}
           title={issue.title}
           aria-label={`${issue.identifier ?? ""} ${issue.title}`}
+          onClick={openTask.link(issue)}
         >
           {issue.title}
         </a>
@@ -329,7 +332,7 @@ function ListRow({
       </span>
       <span className="gb-cell">
         <Avatar name={who} size={18} />
-        <span>{who ?? "Sin asignar"}</span>
+        <span>{who ?? t("Sin asignar")}</span>
       </span>
       <span className="gb-upd">{relativeTime(issue.updatedAt, now)}</span>
     </div>

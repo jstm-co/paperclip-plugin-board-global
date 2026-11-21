@@ -24,12 +24,14 @@ import {
   type DashboardQuery,
   type SortKey,
 } from "../dashboard.js";
+import { localeTag, t } from "../i18n.js";
 import { DASHBOARD_ROUTE, PAGE_ROUTE } from "../shared.js";
 import { CompanyTag, Skeleton, companyClass, companyStyle, cx, plural, useNow } from "./common.js";
 import { ComparisonTable } from "./comparison.js";
 import { ensureDashboardStyles } from "./dashStyles.js";
 import { Feeds, Section } from "./feeds.js";
 import { Icon } from "./icons.js";
+import { LanguageButton } from "./lang.js";
 import { ToastStack, useToasts } from "./layer.js";
 import { ensureStyles } from "./styles.js";
 import { useDashboardData } from "./useDashboardData.js";
@@ -70,37 +72,46 @@ export function DashboardGlobalSidebarLink(_props: PluginSidebarProps) {
       <span className="relative shrink-0">
         <ChartColumnIcon />
       </span>
-      <span className="flex-1 truncate">Dashboard global</span>
+      <span className="flex-1 truncate">{t("Dashboard global")}</span>
     </a>
   );
 }
 
 function listNames(names: readonly string[]): string {
   if (names.length <= 1) return names.join("");
-  return `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
+  return t("{names} y {last}", { names: names.slice(0, -1).join(", "), last: names[names.length - 1]! });
 }
 
 function updatedLabel(loadedAt: number | null, now: number): string {
   if (!loadedAt) return "";
   const minutes = Math.floor((now - loadedAt) / 60_000);
-  if (minutes < 1) return "Actualizado hace unos segundos";
-  if (minutes < 60) return `Actualizado hace ${minutes} min`;
-  return `Actualizado hace ${Math.floor(minutes / 60)} h`;
+  if (minutes < 1) return t("Actualizado hace unos segundos");
+  if (minutes < 60) return t("Actualizado hace {n} min", { n: minutes });
+  return t("Actualizado hace {n} h", { n: Math.floor(minutes / 60) });
 }
 
 function subtitle(model: DashboardModel, loading: boolean): string {
   const total = model.rows.length;
-  if (loading) return `Cargando los datos de ${plural(total || model.companies.length || 4, "empresa", "empresas")}…`;
+  if (loading) {
+    return t("Cargando los datos de {companies}…", { companies: plural(total || model.companies.length || 4, "empresa", "empresas") });
+  }
   const ok = model.rows.filter((row) => row.status === "ok");
   if (model.failed.length > 0) {
     const names = model.failed.map((row) => row.company.name);
-    return `${ok.length} de ${total} empresas · ${listNames(names)} ${names.length === 1 ? "no respondió" : "no respondieron"}`;
+    const args = { ok: ok.length, total, names: listNames(names) };
+    return names.length === 1
+      ? t("{ok} de {total} empresas · {names} no respondió", args)
+      : t("{ok} de {total} empresas · {names} no respondieron", args);
   }
   if (model.selected.length > 0) {
-    return `${ok.length} de ${model.companies.length} empresas: ${ok.map((row) => row.company.name).join(", ")}`;
+    return t("{ok} de {total} empresas: {names}", {
+      ok: ok.length,
+      total: model.companies.length,
+      names: ok.map((row) => row.company.name).join(", "),
+    });
   }
-  if (total === 1) return `${model.rows[0]!.company.name}: qué está bien y qué necesita atención`;
-  return `Las ${total} empresas lado a lado: qué está bien y qué necesita atención`;
+  if (total === 1) return t("{name}: qué está bien y qué necesita atención", { name: model.rows[0]!.company.name });
+  return t("Las {total} empresas lado a lado: qué está bien y qué necesita atención", { total });
 }
 
 // ---------------------------------------------------------------------------
@@ -122,8 +133,8 @@ function CompanyFilter({
   const { selected } = model;
   const none = selected.length === 0;
   return (
-    <div className="gb-cof" role="group" aria-label="Filtrar por empresa">
-      <span className="gb-lbl">Empresas</span>
+    <div className="gb-cof" role="group" aria-label={t("Filtrar por empresa")}>
+      <span className="gb-lbl">{t("Empresas")}</span>
       <button
         type="button"
         className={cx("gb-all", none && "is-on")}
@@ -131,17 +142,21 @@ function CompanyFilter({
         disabled={disabled}
         onClick={() => onChange([])}
       >
-        Todas
+        {t("Todas")}
       </button>
       {model.companies.map((company) => {
         const status = statusById.get(company.id)?.status ?? "wait";
         const on = !none && selected.includes(company.prefix);
         const title =
           status === "wait"
-            ? `${company.name}: cargando…`
+            ? t("{name}: cargando…", { name: company.name })
             : status === "err"
-              ? `${company.name}: no respondió`
-              : `${on ? "Quitar" : none ? "Ver solo" : "Agregar"} ${company.name}`;
+              ? t("{name}: no respondió", { name: company.name })
+              : on
+                ? t("Quitar {name}", { name: company.name })
+                : none
+                  ? t("Ver solo {name}", { name: company.name })
+                  : t("Agregar {name}", { name: company.name });
         return (
           <button
             key={company.id}
@@ -195,13 +210,13 @@ function Breakdown({
             href={`/${company.prefix}/${path}`}
             className={companyClass(company)}
             style={companyStyle(company)}
-            title={`Abrir ${company.name}`}
+            title={t("Abrir {name}", { name: company.name })}
           >
             <b>{company.prefix}</b>
             {value(metrics)}
           </a>
         ) : (
-          <span key={company.id} className={companyClass(company)} style={companyStyle(company)} title={`${company.name}: no respondió`}>
+          <span key={company.id} className={companyClass(company)} style={companyStyle(company)} title={t("{name}: no respondió", { name: company.name })}>
             <b>{company.prefix}</b>—
           </span>
         ),
@@ -240,19 +255,20 @@ function Kpis({ model, loading }: { model: DashboardModel; loading: boolean }) {
       </div>
     );
   }
-  const t = model.totals;
+  const totals = model.totals;
   const { rows } = model;
-  const percent = t.monthUtilizationPercent;
+  const percent = totals.monthUtilizationPercent;
   return (
     <div className="gb-dkpis">
       <Kpi
         icon={<Icon name="bot" size={14} />}
-        label="Agentes activos"
-        value={t.agentsEnabled}
+        label={t("Agentes activos")}
+        value={totals.agentsEnabled}
         desc={
           <>
-            {t.agentsRunning} corriendo · {t.agentsPaused} {t.agentsPaused === 1 ? "pausado" : "pausados"} ·{" "}
-            {t.agentsError > 0 ? <span className="gb-bad">{t.agentsError} con error</span> : "0 con error"}
+            {t("{n} corriendo", { n: totals.agentsRunning })} ·{" "}
+            {totals.agentsPaused === 1 ? t("{n} pausado", { n: totals.agentsPaused }) : t("{n} pausados", { n: totals.agentsPaused })} ·{" "}
+            {totals.agentsError > 0 ? <span className="gb-bad">{t("{n} con error", { n: totals.agentsError })}</span> : t("0 con error")}
           </>
         }
       >
@@ -260,31 +276,42 @@ function Kpis({ model, loading }: { model: DashboardModel; loading: boolean }) {
       </Kpi>
       <Kpi
         icon={<Icon name="circle-dot" size={14} />}
-        label="Tareas en curso"
-        value={t.tasksInProgress}
-        desc={`${plural(t.tasksOpen, "abierta", "abiertas")}, ${plural(t.tasksBlocked, "bloqueada", "bloqueadas")}`}
+        label={t("Tareas en curso")}
+        value={totals.tasksInProgress}
+        desc={t("{open}, {blocked}", {
+          open: plural(totals.tasksOpen, "abierta", "abiertas"),
+          blocked: plural(totals.tasksBlocked, "bloqueada", "bloqueadas"),
+        })}
       >
         <Breakdown rows={rows} path="issues" value={(m) => m.tasksInProgress} />
       </Kpi>
       <Kpi
         icon={<Icon name="dollar-sign" size={14} />}
-        label="Gasto del mes"
-        value={formatMoney(t.monthSpendCents)}
+        label={t("Gasto del mes")}
+        value={formatMoney(totals.monthSpendCents)}
         desc={
           percent === null
-            ? "Sin límite de presupuesto"
-            : `${Math.round(percent)}% de ${formatMoney(t.monthBudgetCents)}${
-                t.unlimitedBudget.length > 0 ? ` · ${t.unlimitedBudget.map((company) => company.prefix).join(", ")} sin límite` : ""
-              }`
+            ? t("Sin límite de presupuesto")
+            : totals.unlimitedBudget.length > 0
+              ? t("{percent}% de {budget} · {names} sin límite", {
+                  percent: Math.round(percent),
+                  budget: formatMoney(totals.monthBudgetCents),
+                  names: totals.unlimitedBudget.map((company) => company.prefix).join(", "),
+                })
+              : t("{percent}% de {budget}", { percent: Math.round(percent), budget: formatMoney(totals.monthBudgetCents) })
         }
       >
         <Breakdown rows={rows} path="costs" value={(m) => formatMoneyShort(m.monthSpendCents)} />
       </Kpi>
       <Kpi
         icon={<Icon name="shield-check" size={14} />}
-        label="Aprobaciones pendientes"
-        value={t.pendingApprovals}
-        desc={t.budgetApprovals > 0 ? `${t.budgetApprovals} de presupuesto, esperando al board` : "Esperando revisión del board"}
+        label={t("Aprobaciones pendientes")}
+        value={totals.pendingApprovals}
+        desc={
+          totals.budgetApprovals > 0
+            ? t("{n} de presupuesto, esperando al board", { n: totals.budgetApprovals })
+            : t("Esperando revisión del board")
+        }
       >
         <Breakdown rows={rows} path="approvals" value={(m) => m.pendingApprovals} />
       </Kpi>
@@ -301,16 +328,23 @@ function BudgetBanner({ alert }: { alert: BudgetAlert }) {
     <div className="gb-budget" role="status">
       <Icon name="triangle-alert" />
       <div className="gb-txt">
-        <b>{alert.incidents === 1 ? "1 incidente de presupuesto activo" : `${alert.incidents} incidentes de presupuesto activos`}</b>
+        <b>
+          {alert.incidents === 1
+            ? t("1 incidente de presupuesto activo")
+            : t("{n} incidentes de presupuesto activos", { n: alert.incidents })}
+        </b>
         {alert.companies.map((entry) => (
           <div key={entry.company.id} className="gb-line">
             <CompanyTag company={entry.company} />
             <span>
-              {entry.company.name}: {plural(entry.pausedAgents, "agente pausado", "agentes pausados")} ·{" "}
-              {plural(entry.pausedProjects, "proyecto pausado", "proyectos pausados")} ·{" "}
-              {plural(entry.budgetApprovals, "aprobación de presupuesto pendiente", "aprobaciones de presupuesto pendientes")}
+              {t("{name}: {agents} · {projects} · {approvals}", {
+                name: entry.company.name,
+                agents: plural(entry.pausedAgents, "agente pausado", "agentes pausados"),
+                projects: plural(entry.pausedProjects, "proyecto pausado", "proyectos pausados"),
+                approvals: plural(entry.budgetApprovals, "aprobación de presupuesto pendiente", "aprobaciones de presupuesto pendientes"),
+              })}
             </span>
-            <a href={entry.costsHref}>Abrir presupuestos de {entry.company.name}</a>
+            <a href={entry.costsHref}>{t("Abrir presupuestos de {name}", { name: entry.company.name })}</a>
           </div>
         ))}
       </div>
@@ -324,14 +358,14 @@ function ErrorBanner({ model, onRetry }: { model: DashboardModel; onRetry: () =>
     <div className="gb-banner" role="alert">
       <Icon name="circle-alert" />
       <span>
-        <b>No se pudieron cargar los datos de {listNames(model.failed.map((row) => row.company.name))}.</b>{" "}
+        <b>{t("No se pudieron cargar los datos de {names}.", { names: listNames(model.failed.map((row) => row.company.name)) })}</b>{" "}
         <span className="gb-muted">
-          Los totales muestran {ok} de {plural(model.rows.length, "empresa", "empresas")}.
+          {t("Los totales muestran {ok} de {companies}.", { ok, companies: plural(model.rows.length, "empresa", "empresas") })}
         </span>
       </span>
       <span className="gb-sp" />
       <button type="button" className="gb-btn is-sm" onClick={onRetry}>
-        Reintentar
+        {t("Reintentar")}
       </button>
     </div>
   );
@@ -344,11 +378,11 @@ function LoadFailed({ message, onRetry }: { message: string | null; onRetry: () 
         <div className="gb-eic" style={{ color: "var(--gb-st-blocked)" }}>
           <Icon name="circle-alert" size={18} />
         </div>
-        <h3>No se pudieron cargar los datos</h3>
-        <p>{message ?? "Ninguna empresa respondió."}</p>
+        <h3>{t("No se pudieron cargar los datos")}</h3>
+        <p>{message ?? t("Ninguna empresa respondió.")}</p>
         <div className="gb-acts">
           <button type="button" className="gb-btn is-sm" onClick={onRetry}>
-            Reintentar
+            {t("Reintentar")}
           </button>
         </div>
       </div>
@@ -357,7 +391,7 @@ function LoadFailed({ message, onRetry }: { message: string | null; onRetry: () 
 }
 
 function seconds(ms: number): string {
-  return (ms / 1000).toLocaleString("es-CL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return (ms / 1000).toLocaleString(localeTag(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 // ---------------------------------------------------------------------------
@@ -379,7 +413,7 @@ export function DashboardGlobalPage(_props: PluginPageProps) {
     (next: DashboardQuery) => navigation.navigate(`/${DASHBOARD_ROUTE}${serializeDashboardQuery(next)}`, { replace: true }),
     [navigation],
   );
-  const data = useDashboardData(query, { onVisibleRefresh: () => toast({ content: "Actualizado al volver a la pestaña" }) });
+  const data = useDashboardData(query, { onVisibleRefresh: () => toast({ content: t("Actualizado al volver a la pestaña") }) });
   const { model } = data;
 
   const loading = !data.ready;
@@ -392,7 +426,12 @@ export function DashboardGlobalPage(_props: PluginPageProps) {
     if (data.refreshing) return;
     const result = await data.refresh();
     if (!result) return;
-    toast({ content: `Dashboard actualizado · ${plural(result.ok, "empresa", "empresas")} en ${seconds(result.elapsedMs)} s` });
+    toast({
+      content: t("Dashboard actualizado · {companies} en {seconds} s", {
+        companies: plural(result.ok, "empresa", "empresas"),
+        seconds: seconds(result.elapsedMs),
+      }),
+    });
   };
 
   // «Reintentar» de una fila pide solo esa empresa; el del aviso, todas las que fallaron (§4.2).
@@ -402,11 +441,26 @@ export function DashboardGlobalPage(_props: PluginPageProps) {
     const stillFailing = results.flatMap((load) => (load?.status === "err" ? [load.company.name] : []));
     if (ok.length > 0) {
       const rest = model.failed.length - ok.length;
-      const scope = model.rows.length === 1 ? "datos al día" : `datos de las ${model.rows.length} empresas al día`;
-      toast({ content: `${listNames(ok)} ${ok.length === 1 ? "respondió" : "respondieron"}${rest === 0 ? ` · ${scope}` : ""}` });
+      const names = listNames(ok);
+      const total = model.rows.length;
+      let content: string;
+      if (rest !== 0) content = ok.length === 1 ? t("{names} respondió", { names }) : t("{names} respondieron", { names });
+      else if (total === 1) {
+        content = ok.length === 1 ? t("{names} respondió · datos al día", { names }) : t("{names} respondieron · datos al día", { names });
+      } else {
+        content =
+          ok.length === 1
+            ? t("{names} respondió · datos de las {total} empresas al día", { names, total })
+            : t("{names} respondieron · datos de las {total} empresas al día", { names, total });
+      }
+      toast({ content });
     }
     if (stillFailing.length > 0) {
-      toast({ error: true, content: `${listNames(stillFailing)} sigue${stillFailing.length === 1 ? "" : "n"} sin responder` });
+      const names = listNames(stillFailing);
+      toast({
+        error: true,
+        content: stillFailing.length === 1 ? t("{names} sigue sin responder", { names }) : t("{names} siguen sin responder", { names }),
+      });
     }
   };
 
@@ -417,13 +471,13 @@ export function DashboardGlobalPage(_props: PluginPageProps) {
       <div className="gb-dhead">
         <div>
           <div className="gb-title">
-            <h1>Dashboard global</h1>
-            <a {...navigation.linkProps(`/${PAGE_ROUTE}`)} className="gb-xlink" title="Board global: las tareas de todas las empresas">
-              Board global
+            <h1>{t("Dashboard global")}</h1>
+            <a {...navigation.linkProps(`/${PAGE_ROUTE}`)} className="gb-xlink" title={t("Board global: las tareas de todas las empresas")}>
+              {t("Board global")}
               <Icon name="chevron-right" size={12} />
             </a>
           </div>
-          <div className="gb-sub">{allFailed ? "No se pudieron cargar los datos" : subtitle(model, loading)}</div>
+          <div className="gb-sub">{allFailed ? t("No se pudieron cargar los datos") : subtitle(model, loading)}</div>
         </div>
         <span className="gb-sp" />
         <CompanyFilter
@@ -434,7 +488,7 @@ export function DashboardGlobalPage(_props: PluginPageProps) {
         />
         <span className="gb-upd">
           <Icon name="clock" size={12} />
-          {loading ? "Cargando…" : updatedLabel(data.loadedAt, now)}
+          {loading ? t("Cargando…") : updatedLabel(data.loadedAt, now)}
         </span>
         <button
           type="button"
@@ -444,8 +498,9 @@ export function DashboardGlobalPage(_props: PluginPageProps) {
           onClick={() => void refresh()}
         >
           <Icon name="refresh" size={14} />
-          Actualizar
+          {t("Actualizar")}
         </button>
+        <LanguageButton />
       </div>
 
       {allFailed ? (
@@ -456,9 +511,9 @@ export function DashboardGlobalPage(_props: PluginPageProps) {
           <Kpis model={model} loading={waiting} />
           {!waiting && model.budgetAlert ? <BudgetBanner alert={model.budgetAlert} /> : null}
           <Section
-            title="Comparativa por empresa"
-            meta={waiting ? "cada fila aparece cuando su empresa responde" : "clic en una fila para abrir su Dashboard"}
-            right={waiting ? null : <span className="gb-scale">Las barras usan la misma escala en todas las filas</span>}
+            title={t("Comparativa por empresa")}
+            meta={waiting ? t("cada fila aparece cuando su empresa responde") : t("clic en una fila para abrir su Dashboard")}
+            right={waiting ? null : <span className="gb-scale">{t("Las barras usan la misma escala en todas las filas")}</span>}
           />
           <ComparisonTable model={model} rows={rows} query={query} onSort={onSort} onRetry={(row) => void retry([row])} />
           <Feeds model={model} loading={waiting} now={now} />

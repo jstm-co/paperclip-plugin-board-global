@@ -3,6 +3,7 @@
 // novedad y último movimiento). Las secciones van en el orden de `PEDIDO_STATES`:
 // lo que pide algo de ti, arriba; «Sin empezar» y «Cerrado» parten plegadas.
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { t } from "../i18n.js";
 import { WAIT_LABELS, emptyFilters, hasActiveFilters, relativeTime, type BoardFilters, type BoardIndex, type BoardQuery } from "../board.js";
 import {
   PEDIDO_FOLDED,
@@ -27,10 +28,11 @@ import {
   assigneeName,
   cx,
   isOwnClick,
-  openHref,
   plural,
 } from "./common.js";
+import { tx } from "./i18n.js";
 import { Icon, type IconName } from "./icons.js";
+import { useOpenTask } from "./open.js";
 import { usePedidoNotes, type PedidoNote } from "./usePedidos.js";
 
 const SECTION_STEP = 25;
@@ -171,7 +173,7 @@ function Section({
           {left > 0 ? (
             <div className="gb-rowmore">
               <button type="button" className="gb-linkbtn" onClick={() => onMore(limit + SECTION_STEP)}>
-                Ver {Math.min(SECTION_STEP, left)} más · quedan {left}
+                {t("Ver {n} más · quedan {left}", { n: Math.min(SECTION_STEP, left), left })}
               </button>
             </div>
           ) : null}
@@ -183,8 +185,9 @@ function Section({
 
 /** Enlace a otra tarea dentro de la celda: va por encima del enlace que cubre la fila. */
 function TaskLink({ index, issue, children }: { index: BoardIndex; issue: BoardIssue; children?: ReactNode }) {
+  const openTask = useOpenTask();
   return (
-    <a className="gb-plink gb-mono" href={hrefFor(index, issue)} title={issue.title}>
+    <a className="gb-plink gb-mono" href={hrefFor(index, issue)} title={issue.title} onClick={openTask.link(issue)}>
       {children ?? issue.identifier}
     </a>
   );
@@ -209,14 +212,12 @@ function Ball({ index, row }: { index: BoardIndex; row: PedidoRow }) {
           <span className="gb-pwhat" title={waiting?.what}>
             {first.id === issue.id ? (
               <TaskLink index={index} issue={first}>
-                {waiting ? WAIT_LABELS[waiting.kind] : "Atender"}
+                {waiting ? WAIT_LABELS[waiting.kind] : t("Atender")}
               </TaskLink>
             ) : (
-              <>
-                en <TaskLink index={index} issue={first} />
-              </>
+              <>{tx("en {task}", { task: <TaskLink index={index} issue={first} /> })}</>
             )}
-            {rest > 0 ? ` y ${rest} más` : null}
+            {rest > 0 ? t(" y {n} más", { n: rest }) : null}
           </span>
         </>
       );
@@ -225,7 +226,7 @@ function Ball({ index, row }: { index: BoardIndex; row: PedidoRow }) {
       return (
         <>
           {icon}
-          <span className="gb-pwhat">Todo hecho, falta cerrarlo</span>
+          <span className="gb-pwhat">{t("Todo hecho, falta cerrarlo")}</span>
         </>
       );
     case "trabajando": {
@@ -235,14 +236,10 @@ function Ball({ index, row }: { index: BoardIndex; row: PedidoRow }) {
         <>
           {icon}
           <span className="gb-pwhat">
-            {first.run.agentName}
-            {first.issue.id === issue.id ? null : (
-              <>
-                {" "}
-                en <TaskLink index={index} issue={first.issue} />
-              </>
-            )}
-            {rest > 0 ? ` y ${rest} más` : null}
+            {first.issue.id === issue.id
+              ? first.run.agentName
+              : tx("{agent} en {task}", { agent: first.run.agentName, task: <TaskLink index={index} issue={first.issue} /> })}
+            {rest > 0 ? t(" y {n} más", { n: rest }) : null}
           </span>
         </>
       );
@@ -252,14 +249,13 @@ function Ball({ index, row }: { index: BoardIndex; row: PedidoRow }) {
         <>
           {icon}
           <span className="gb-pwhat">
-            {row.stuck && row.stuck.id !== issue.id ? (
-              <>
-                <TaskLink index={index} issue={row.stuck} /> espera
-              </>
-            ) : (
-              "Espera"
-            )}{" "}
-            {row.blocker ? <TaskLink index={index} issue={row.blocker} /> : "otra tarea"}
+            {row.stuck && row.stuck.id !== issue.id
+              ? row.blocker
+                ? tx("{stuck} espera {blocker}", { stuck: <TaskLink index={index} issue={row.stuck} />, blocker: <TaskLink index={index} issue={row.blocker} /> })
+                : tx("{stuck} espera otra tarea", { stuck: <TaskLink index={index} issue={row.stuck} /> })
+              : row.blocker
+                ? tx("Espera {blocker}", { blocker: <TaskLink index={index} issue={row.blocker} /> })
+                : t("Espera otra tarea")}
           </span>
           {row.blocker && index.waiting.has(row.blocker.id) ? <TocaPill small iconOnly /> : null}
         </>
@@ -268,7 +264,7 @@ function Ball({ index, row }: { index: BoardIndex; row: PedidoRow }) {
       return (
         <>
           {icon}
-          <span className="gb-pwhat">Lo que falta está en backlog</span>
+          <span className="gb-pwhat">{t("Lo que falta está en backlog")}</span>
         </>
       );
     case "sueltos": {
@@ -276,7 +272,7 @@ function Ball({ index, row }: { index: BoardIndex; row: PedidoRow }) {
       return (
         <>
           {icon}
-          <span className="gb-pwhat">Cerrado con {plural(left, "subtarea abierta", "subtareas abiertas")}</span>
+          <span className="gb-pwhat">{t("Cerrado con {subtasks}", { subtasks: plural(left, "subtarea abierta", "subtareas abiertas") })}</span>
         </>
       );
     }
@@ -286,11 +282,9 @@ function Ball({ index, row }: { index: BoardIndex; row: PedidoRow }) {
           {icon}
           <span className="gb-pwhat">
             {row.stuck && row.stuck.id !== issue.id ? (
-              <>
-                <TaskLink index={index} issue={row.stuck} /> bloqueada
-              </>
+              <>{tx("{task} bloqueada", { task: <TaskLink index={index} issue={row.stuck} /> })}</>
             ) : (
-              "Bloqueado, sin bloqueador"
+              t("Bloqueado, sin bloqueador")
             )}
           </span>
         </>
@@ -301,8 +295,7 @@ function Ball({ index, row }: { index: BoardIndex; row: PedidoRow }) {
         <>
           <StatusIcon status={issue.status} />
           <span className="gb-pwhat">
-            {STATUS_LABELS[issue.status]}
-            {who ? ` · ${who}` : null}
+            {who ? t("{status} · {who}", { status: STATUS_LABELS[issue.status], who }) : STATUS_LABELS[issue.status]}
           </span>
         </>
       );
@@ -329,6 +322,7 @@ function Row({
 }) {
   const { issue, progress } = row;
   const href = hrefFor(index, issue);
+  const openTask = useOpenTask();
   const hit = row.hits[0];
   return (
     <div className={cx("gb-prow", `is-${row.state}`, open && "is-open")} data-iid={issue.id}>
@@ -336,7 +330,7 @@ function Row({
         className="gb-pmain"
         onClick={(event) => {
           // El enlace cubre la fila; esto cubre los iconos que quedan encima para mostrar su título.
-          if (isOwnClick(event)) openHref(href, event);
+          if (isOwnClick(event)) openTask.row(issue, href, event);
         }}
       >
         <span className="gb-pexp">
@@ -345,7 +339,11 @@ function Row({
               type="button"
               className={cx("gb-tchev", !open && "is-closed")}
               aria-expanded={open}
-              aria-label={`${open ? "Plegar" : "Desplegar"} las subtareas de ${issue.identifier ?? "el pedido"}`}
+              aria-label={
+                open
+                  ? t("Plegar las subtareas de {id}", { id: issue.identifier ?? t("el pedido") })
+                  : t("Desplegar las subtareas de {id}", { id: issue.identifier ?? t("el pedido") })
+              }
               onClick={onExpand}
             >
               <Icon name="chevron-down" size={12} />
@@ -362,7 +360,7 @@ function Row({
           <span className="gb-ptitle">
             {/* Un pedido cerrado que sigue en la lista (cabos sueltos, o «Ver cerrados») lleva su estado a la vista. */}
             {isOpenStatus(issue.status) ? null : <StatusIcon status={issue.status} />}
-            <a className="gb-tt gb-cover" href={href} title={issue.title} aria-label={`${issue.identifier ?? ""} ${issue.title}`}>
+            <a className="gb-tt gb-cover" href={href} title={issue.title} aria-label={`${issue.identifier ?? ""} ${issue.title}`} onClick={openTask.link(issue)}>
               {issue.title}
             </a>
           </span>
@@ -370,8 +368,8 @@ function Row({
             <span className="gb-pnote">
               <Icon name="corner-down-right" size={12} />
               <span>
-                Coincide <TaskLink index={index} issue={hit} /> {hit.title}
-                {row.hits.length > 1 ? ` y ${row.hits.length - 1} más` : null}
+                {tx("Coincide {task} {title}", { task: <TaskLink index={index} issue={hit} />, title: hit.title })}
+                {row.hits.length > 1 ? t(" y {n} más", { n: row.hits.length - 1 }) : null}
               </span>
             </span>
           ) : note ? (
@@ -391,11 +389,11 @@ function Row({
             <>
               <ProgressBar done={progress.done} total={progress.total} width={56} />
               <span className="gb-tnum">
-                {progress.done} de {progress.total}
+                {t("{done} de {total}", { done: progress.done, total: progress.total })}
               </span>
               <span className="gb-popen">
                 {row.open.map(({ status, count }) => (
-                  <span key={status} title={`${count} ${STATUS_LABELS[status].toLowerCase()}`}>
+                  <span key={status} title={t("{count} {status}", { count, status: STATUS_LABELS[status].toLowerCase() })}>
                     <StatusIcon status={status} size={12} />
                     <span className="gb-tnum">{count}</span>
                   </span>
@@ -403,10 +401,10 @@ function Row({
               </span>
             </>
           ) : (
-            <span className="gb-muted">Sin subtareas</span>
+            <span className="gb-muted">{t("Sin subtareas")}</span>
           )}
         </span>
-        <span className="gb-upd" title="Último movimiento de cualquier tarea del pedido">
+        <span className="gb-upd" title={t("Último movimiento de cualquier tarea del pedido")}>
           {relativeTime(row.lastMove, now)}
         </span>
       </div>
@@ -419,6 +417,7 @@ function Row({
 function Tree({ index, root, live, now }: { index: BoardIndex; root: BoardIssue; live: ReadonlyMap<string, readonly LiveRun[]>; now: number }) {
   const rows = useMemo(() => pedidoTree(index, root), [index, root]);
   const [limit, setLimit] = useState(TREE_STEP);
+  const openTask = useOpenTask();
   return (
     <div className="gb-ptree">
       {rows.slice(0, limit).map(({ issue, depth }) => {
@@ -431,24 +430,24 @@ function Tree({ index, root, live, now }: { index: BoardIndex; root: BoardIssue;
             className={cx("gb-pkid", !isOpenStatus(issue.status) && "is-closed", index.waiting.has(issue.id) && "is-w")}
             style={{ "--d": depth } as CSSProperties}
             onClick={(event) => {
-              if (isOwnClick(event)) openHref(href, event);
+              if (isOwnClick(event)) openTask.row(issue, href, event);
             }}
           >
             <StatusIcon status={issue.status} size={12} />
             <span className="gb-kidid gb-mono">{issue.identifier}</span>
-            <a className="gb-tt gb-cover" href={href} title={issue.title}>
+            <a className="gb-tt gb-cover" href={href} title={issue.title} onClick={openTask.link(issue)}>
               {issue.title}
             </a>
             {index.waiting.has(issue.id) ? <TocaPill small /> : null}
             {run ? (
-              <span className="gb-plive" title={`${run.agentName} está corriendo ahora`}>
+              <span className="gb-plive" title={t("{agent} está corriendo ahora", { agent: run.agentName })}>
                 <Icon name="zap" size={12} />
                 {run.agentName}
               </span>
             ) : null}
             <span className="gb-pwho">
               <Avatar name={who} size={16} />
-              <span>{who ?? "Sin asignar"}</span>
+              <span>{who ?? t("Sin asignar")}</span>
             </span>
             <span className="gb-upd">{relativeTime(issue.updatedAt, now)}</span>
           </div>
@@ -457,7 +456,7 @@ function Tree({ index, root, live, now }: { index: BoardIndex; root: BoardIssue;
       {rows.length > limit ? (
         <div className="gb-rowmore">
           <button type="button" className="gb-linkbtn" onClick={() => setLimit(limit + TREE_STEP)}>
-            Ver {Math.min(TREE_STEP, rows.length - limit)} más · quedan {rows.length - limit}
+            {t("Ver {n} más · quedan {left}", { n: Math.min(TREE_STEP, rows.length - limit), left: rows.length - limit })}
           </button>
         </div>
       ) : null}
@@ -475,22 +474,22 @@ export function EmptyPedidos({ query, onQuery }: { query: BoardQuery; onQuery: (
         <div className="gb-eic">
           <Icon name="search-x" size={18} />
         </div>
-        <h3>No hay pedidos {filtered || query.hide.length > 0 ? "con estos filtros" : "abiertos"}</h3>
-        <p>Un pedido es una tarea sin tarea padre. Las subtareas se ven al desplegar su pedido.</p>
+        <h3>{filtered || query.hide.length > 0 ? t("No hay pedidos con estos filtros") : t("No hay pedidos abiertos")}</h3>
+        <p>{t("Un pedido es una tarea sin tarea padre. Las subtareas se ven al desplegar su pedido.")}</p>
         <div className="gb-acts">
           {filtered ? (
             <button type="button" className="gb-btn is-sm" onClick={() => setFilters(emptyFilters())}>
-              Limpiar filtros
+              {t("Limpiar filtros")}
             </button>
           ) : null}
           {query.hide.length > 0 ? (
             <button type="button" className="gb-btn is-sm" onClick={() => onQuery({ ...query, hide: [] })}>
-              Mostrar los títulos ocultos
+              {t("Mostrar los títulos ocultos")}
             </button>
           ) : null}
           {query.showClosed ? null : (
             <button type="button" className="gb-btn is-sm" onClick={() => onQuery({ ...query, showClosed: true })}>
-              Ver cerrados
+              {t("Ver cerrados")}
             </button>
           )}
         </div>

@@ -34,7 +34,12 @@
 // La vista Pedidos suma dos lecturas, solo mientras está abierta: las corridas
 // activas (`/live-runs`, para «Trabajando ahora») y el último comentario de cada
 // pedido visible (`GET /api/issues/:id/comments?limit=1`).
+//
+// El modal de tarea (JST-408) lee la descripción (`GET /api/issues/:id`) y los
+// comentarios, comenta (`POST /api/issues/:id/comments`) y marca la tarea como
+// leída (`POST /api/issues/:id/read`), igual que la página nativa de la tarea.
 import type { CreateRequest, CreatedIssue } from "../create.js";
+import { getLocale } from "../i18n.js";
 import {
   OPEN_STATUSES,
   PLUGIN_KEY,
@@ -45,6 +50,7 @@ import {
   type DashboardSummary,
   type IssueBlockedBy,
   type IssueComment,
+  type IssueDetail,
   type IssueStatus,
   type LiveRun,
 } from "../shared.js";
@@ -89,7 +95,7 @@ export async function listCompanies(): Promise<CompanyRef[]> {
 export async function getCompanyData<T>(key: string, companyId: string, params: Record<string, unknown> = {}): Promise<T> {
   const body = await request<{ data: T }>(`/plugins/${PLUGIN_KEY}/data/${encodeURIComponent(key)}`, {
     method: "POST",
-    body: JSON.stringify({ companyId, params }),
+    body: JSON.stringify({ companyId, params: { ...params, locale: getLocale() } }),
   });
   return body.data;
 }
@@ -102,7 +108,8 @@ export async function getCompanyData<T>(key: string, companyId: string, params: 
 export async function runAction<T>(key: string, companyId: string, params: Record<string, unknown> = {}): Promise<T> {
   const body = await request<{ data: T }>(`/plugins/${PLUGIN_KEY}/actions/${encodeURIComponent(key)}`, {
     method: "POST",
-    body: JSON.stringify({ companyId, params }),
+    // El idioma va con la acción: si el worker la rechaza, su mensaje sale en el de quien mira (JST-409).
+    body: JSON.stringify({ companyId, params: { ...params, locale: getLocale() } }),
   });
   return body.data;
 }
@@ -162,6 +169,24 @@ export function listActivity(companyId: string, limit = 10): Promise<ActivityEve
 export async function listIssueComments(issueId: string, limit = 1): Promise<IssueComment[]> {
   const comments = await request<IssueComment[]>(`/issues/${encodeURIComponent(issueId)}/comments?limit=${limit}`);
   return Array.isArray(comments) ? comments : [];
+}
+
+/** La tarea completa: la lista del worker no trae la descripción. */
+export function getIssueDetail(issueId: string): Promise<IssueDetail> {
+  return request(`/issues/${encodeURIComponent(issueId)}`);
+}
+
+/** Comenta con la sesión del usuario, como la página de la tarea: si la lleva un agente, lo despierta. */
+export function addIssueComment(issueId: string, body: string): Promise<IssueComment> {
+  return request(`/issues/${encodeURIComponent(issueId)}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
+/** Marca la tarea como leída en el Inbox del usuario, como al abrir su página. */
+export function markIssueRead(issueId: string): Promise<unknown> {
+  return request(`/issues/${encodeURIComponent(issueId)}/read`, { method: "POST", body: "{}" });
 }
 
 export function updateIssueStatus(issueId: string, status: IssueStatus): Promise<{ id: string; status: IssueStatus }> {

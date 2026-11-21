@@ -20,6 +20,8 @@ import {
   type KanbanLane,
   type LaneBy,
 } from "../board.js";
+import { t } from "../i18n.js";
+import { tx } from "./i18n.js";
 import type { BoardIssue, IssueStatus } from "../shared.js";
 import { Card } from "./card.js";
 import { Avatar, CompanyTag, STATUS_LABELS, Skeleton, TocaPill, companyClass, companyStyle, cx, plural } from "./common.js";
@@ -32,13 +34,18 @@ import { Layer } from "./layer.js";
 const PER_CELL = 2;
 const PER_CELL_FLAT = 6;
 const MORE_STEP = 20;
-/** Ancho mínimo de una columna: por debajo, el board se desplaza hacia el lado. */
-const MIN_COL = 216;
+/**
+ * Ancho mínimo de una columna: por debajo, el board se desplaza hacia el lado.
+ * Con «Por confirmar» son cinco columnas, y a 200 px caben sin scroll lateral
+ * en una pantalla de 1440 px con el menú de Paperclip abierto.
+ */
+const MIN_COL = 200;
 const COL_GAP = 10;
 
-export const COLUMN_LABELS: Record<BoardColumn, string> = { ...STATUS_LABELS, [CONFIRM_COLUMN]: "Por confirmar" };
-const CONFIRM_HELP =
-  "Tareas que alguien cerró (hechas o canceladas) y todavía no confirmas. En Paperclip ya están cerradas: aquí esperan tu visto bueno.";
+export const COLUMN_LABELS: Record<BoardColumn, string> = { ...STATUS_LABELS, [CONFIRM_COLUMN]: t("Por confirmar") };
+const CONFIRM_HELP = t(
+  "Tareas que alguien cerró (hechas o canceladas) y todavía no confirmas. En Paperclip ya están cerradas: aquí esperan tu visto bueno.",
+);
 
 /** Clave de estado de la vista (carriles plegados y «Ver N más»): cambia con el tipo de carril. */
 export const laneUiKey = (laneBy: LaneBy | null, key: string) => `${laneBy ?? "flat"}:${key}`;
@@ -216,12 +223,12 @@ export function LaneBoard({
                   <button
                     type="button"
                     className="gb-colact"
-                    title={`Confirmar las ${items.length} de una vez`}
-                    aria-label={`Confirmar las ${items.length} tareas de «Por confirmar»`}
+                    title={t("Confirmar las {n} de una vez", { n: items.length })}
+                    aria-label={t("Confirmar las {n} tareas de «Por confirmar»", { n: items.length })}
                     onClick={() => onConfirmAll(items)}
                   >
                     <Icon name="check" size={12} />
-                    Todas
+                    {t("Todas")}
                   </button>
                 ) : null}
               </div>
@@ -238,7 +245,7 @@ export function LaneBoard({
             laneBy === "responsable" && lane.key.startsWith("agent:")
               ? index.companyById.get(index.agentById.get(lane.key.slice("agent:".length))?.companyId ?? "")
               : undefined;
-          const label = laneBy ? lane.label : "Board";
+          const label = laneBy ? lane.label : t("Board");
           return (
             <section
               key={lane.key}
@@ -258,7 +265,7 @@ export function LaneBoard({
                     type="button"
                     className="gb-lanebtn"
                     aria-expanded={!closed}
-                    title={`${closed ? "Desplegar" : "Plegar"} el carril`}
+                    title={closed ? t("Desplegar el carril") : t("Plegar el carril")}
                     onClick={() => onToggleLane(uiKey)}
                   >
                     <span className="gb-chev">
@@ -267,7 +274,7 @@ export function LaneBoard({
                     {laneName(index, lane, laneBy)}
                     {agentCompany ? <CompanyTag company={agentCompany} /> : null}
                     <span className="gb-meta">{plural(lane.total, "tarea", "tareas")}</span>
-                    {toca > 0 ? <TocaPill label={`Te toca ${toca}`} small /> : null}
+                    {toca > 0 ? <TocaPill label={t("Te toca {n}", { n: toca })} small /> : null}
                   </button>
                 </div>
               ) : null}
@@ -305,7 +312,7 @@ export function LaneBoard({
                         ))}
                         {cell.issues.length > limit ? (
                           <button type="button" className="gb-more" onClick={() => onMore(moreKey, limit + MORE_STEP)}>
-                            Ver {cell.issues.length - limit} más
+                            {t("Ver {n} más", { n: cell.issues.length - limit })}
                           </button>
                         ) : null}
                         {cell.status === CONFIRM_COLUMN ? null : (
@@ -326,8 +333,8 @@ export function LaneBoard({
           <div className="gb-lnote">
             <Icon name="info" size={12} />
             {hidden === 1
-              ? `1 ${meta.label.toLowerCase()} sin tareas en estas columnas no se muestra.`
-              : `${hidden} ${meta.plural} sin tareas en estas columnas no se muestran.`}
+              ? t("1 {name} sin tareas en estas columnas no se muestra.", { name: meta.label.toLowerCase() })
+              : t("{n} {name} sin tareas en estas columnas no se muestran.", { n: hidden, name: meta.plural })}
           </div>
         ) : null}
       </div>
@@ -336,7 +343,7 @@ export function LaneBoard({
           type="button"
           className={cx("gb-closedtoggle", dragPending && "is-drop", dropOn === "rail" && "gb-drop-on")}
           onClick={onShowClosed}
-          title={dragPending ? "Suelta aquí para confirmarla" : "Mostrar las columnas Hecha y Cancelada"}
+          title={dragPending ? t("Suelta aquí para confirmarla") : t("Mostrar las columnas Hecha y Cancelada")}
           onDragOver={(event) => {
             if (!dragPending) {
               badOver.current = true;
@@ -356,7 +363,7 @@ export function LaneBoard({
           }}
         >
           <Icon name={dragPending ? "check" : "eye"} size={14} />
-          {dragPending ? "Suelta aquí para confirmar" : `Hechas y canceladas · ${closedCount}`}
+          {dragPending ? t("Suelta aquí para confirmar") : t("Hechas y canceladas · {n}", { n: closedCount })}
         </button>
       ) : null}
 
@@ -365,20 +372,13 @@ export function LaneBoard({
           <div className="gb-draghint" style={hintLeft === undefined ? undefined : { left: hintLeft }} role="status">
             <Icon name={dragPending ? "check" : "lock"} size={14} />
             <span>
-              {dragPending ? (
-                <>
-                  Suéltala en <b>{showRail ? "Hechas y canceladas" : COLUMN_LABELS[dragging!.status]}</b> para confirmarla, o en una columna abierta para
-                  reabrirla.
-                </>
-              ) : laneBy === "empresa" ? (
-                <>
-                  Suelta en una columna de <b>{dragLaneName}</b>. Una tarea no puede pasar a otra empresa.
-                </>
-              ) : (
-                <>
-                  Suelta dentro de <b>{dragLaneName}</b>. Arrastrar cambia el estado, no {meta?.what}.
-                </>
-              )}
+              {dragPending
+                ? tx("Suéltala en {column} para confirmarla, o en una columna abierta para reabrirla.", {
+                    column: <b>{showRail ? t("Hechas y canceladas") : COLUMN_LABELS[dragging!.status]}</b>,
+                  })
+                : laneBy === "empresa"
+                  ? tx("Suelta en una columna de {lane}. Una tarea no puede pasar a otra empresa.", { lane: <b>{dragLaneName}</b> })
+                  : tx("Suelta dentro de {lane}. Arrastrar cambia el estado, no {what}.", { lane: <b>{dragLaneName}</b>, what: meta?.what ?? "" })}
             </span>
           </div>
         </Layer>
@@ -389,17 +389,17 @@ export function LaneBoard({
 
 /** Toast al soltar donde no se puede: otro carril (§4.4) o la columna «Por confirmar». */
 export function badDropMessage(laneBy: LaneBy | null): string {
-  if (!laneBy) return "Ahí no se puede soltar: «Por confirmar» se llena sola con lo que se cierra.";
+  if (!laneBy) return t("Ahí no se puede soltar: «Por confirmar» se llena sola con lo que se cierra.");
   return laneBy === "empresa"
-    ? "Solo se suelta dentro de su empresa: una tarea no puede pasar a otra."
-    : `Solo se suelta dentro del mismo carril. Para cambiar ${LANE_META[laneBy].what}, abre la tarea.`;
+    ? t("Solo se suelta dentro de su empresa: una tarea no puede pasar a otra.")
+    : t("Solo se suelta dentro del mismo carril. Para cambiar {what}, abre la tarea.", { what: LANE_META[laneBy].what });
 }
 
 /** Esqueleto de carga: las columnas del Board y dos carriles con tarjetas (§4.1). */
 export function BoardSkeleton() {
   const gridStyle = { "--gcols": "repeat(4, minmax(0, 1fr))" } as CSSProperties;
   return (
-    <div className="gb-lanewrap" aria-busy="true" aria-label="Cargando tareas">
+    <div className="gb-lanewrap" aria-busy="true" aria-label={t("Cargando tareas")}>
       <div className="gb-lanes" style={{ "--gminw": "0px" } as CSSProperties}>
         <div className="gb-grid gb-lhead" style={gridStyle}>
           {[0, 1, 2, 3].map((column) => (

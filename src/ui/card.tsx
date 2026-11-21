@@ -1,7 +1,7 @@
 // Tarjeta del Board (JST-407, sobre §3.7): título primero, la línea «Te toca»
 // (§3.9), un chip de contexto y un pie con lo mínimo. Las subtareas se ven en
 // la vista previa al pasar (§3.10), no dentro de la tarjeta.
-import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type ReactNode } from "react";
 import {
   WAIT_LABELS,
   ancestorsOf,
@@ -15,6 +15,8 @@ import {
   waitBlockerOf,
   type BoardIndex,
 } from "../board.js";
+import { t } from "../i18n.js";
+import { tx } from "./i18n.js";
 import { isOpenStatus, type BoardIssue } from "../shared.js";
 import {
   Avatar,
@@ -33,6 +35,7 @@ import {
 import { MarkPill, markClass, useMark } from "./create.js";
 import { Icon } from "./icons.js";
 import { Layer } from "./layer.js";
+import { useOpenTask } from "./open.js";
 
 export function hrefFor(index: BoardIndex, issue: BoardIssue): string {
   return index.waiting.get(issue.id)?.href ?? issueHref(index, issue);
@@ -51,10 +54,10 @@ function WaitLine({ index, issue }: { index: BoardIndex; issue: BoardIssue }) {
   const blocker = waitBlockerOf(index, issue);
   if (!blocker) return null;
   return (
-    <div className="gb-wait-line is-dep" title={`Bloqueada hasta que respondas en ${blocker.identifier ?? ""}`}>
+    <div className="gb-wait-line is-dep" title={t("Bloqueada hasta que respondas en {id}", { id: blocker.identifier ?? "" })}>
       <Icon name="link" size={12} />
       <span className="gb-what">
-        Espera tu respuesta en <b className="gb-mono">{blocker.identifier}</b>
+        {tx("Espera tu respuesta en {id}", { id: <b className="gb-mono">{blocker.identifier}</b> })}
       </span>
     </div>
   );
@@ -65,7 +68,7 @@ export function ContextChip({ index, issue }: { index: BoardIndex; issue: BoardI
   const parent = issue.parentId ? index.byId.get(issue.parentId) : undefined;
   if (parent) {
     return (
-      <span className="gb-parchip" title={`Subtarea de ${parent.identifier ?? ""} · ${parent.title}`}>
+      <span className="gb-parchip" title={t("Subtarea de {id} · {title}", { id: parent.identifier ?? "", title: parent.title })}>
         <Icon name="corner-down-right" size={12} />
         {parent.identifier}
       </span>
@@ -74,7 +77,7 @@ export function ContextChip({ index, issue }: { index: BoardIndex; issue: BoardI
   if (!issue.projectId) return null;
   const project = projectLabel(index, issue.projectId);
   return (
-    <span className="gb-prjchip" title={`Proyecto: ${project}`}>
+    <span className="gb-prjchip" title={t("Proyecto: {project}", { project })}>
       <Icon name="folder" size={12} />
       <span>{project}</span>
     </span>
@@ -86,7 +89,7 @@ export function SubtaskCount({ index, issue }: { index: BoardIndex; issue: Board
   const progress = progressOf(index, issue);
   if (progress.total === 0) return null;
   return (
-    <span className="gb-subn gb-tnum" title={`${progress.done} de ${progress.total} subtareas hechas`}>
+    <span className="gb-subn gb-tnum" title={t("{done} de {total} subtareas hechas", { done: progress.done, total: progress.total })}>
       <Icon name="list-tree" size={12} />
       {progress.done}/{progress.total}
     </span>
@@ -110,6 +113,7 @@ export const Card = memo(function Card({ index, issue, pending = false, dragging
   const who = assigneeName(index, issue);
   const href = hrefFor(index, issue);
   const mark = useMark(issue.id);
+  const openTask = useOpenTask();
   const hot = issue.priority === "critical" || issue.priority === "high";
   return (
     <div
@@ -128,7 +132,7 @@ export const Card = memo(function Card({ index, issue, pending = false, dragging
     >
       <div className="gb-t">
         {/* Enlace normal que cubre la tarjeta (§5): sin `draggable` para que se arrastre la tarjeta. */}
-        <a className="gb-cover" href={href} draggable={false} aria-label={`${issue.identifier ?? ""} ${issue.title}`}>
+        <a className="gb-cover" href={href} draggable={false} aria-label={`${issue.identifier ?? ""} ${issue.title}`} onClick={openTask.link(issue)}>
           {issue.title}
         </a>
       </div>
@@ -156,11 +160,11 @@ export const Card = memo(function Card({ index, issue, pending = false, dragging
         <button
           type="button"
           className="gb-confirm"
-          title="Ya la revisé: sale de «Por confirmar» y queda entre las cerradas"
+          title={t("Ya la revisé: sale de «Por confirmar» y queda entre las cerradas")}
           onClick={() => onConfirm(issue)}
         >
           <Icon name="check" size={14} />
-          Confirmar
+          {t("Confirmar")}
         </button>
       ) : null}
     </div>
@@ -172,6 +176,56 @@ export const Card = memo(function Card({ index, issue, pending = false, dragging
 // ---------------------------------------------------------------------------
 
 const PEEK_WIDTH = 320;
+
+/**
+ * Qué se espera de la persona en esta tarea, o qué la tiene bloqueada. Nada si
+ * no aplica. La usan la vista previa y el modal de tarea, que suma su enlace
+ * para ir a responder (`children`).
+ */
+export function WaitNote({ index, issue, now, children }: { index: BoardIndex; issue: BoardIssue; now: number; children?: ReactNode }) {
+  const waiting = index.waiting.get(issue.id);
+  if (waiting) {
+    const unblocks = dependentsOf(index, [issue]);
+    return (
+      <div className="gb-peek-toca">
+        <TocaPill />
+        <span>
+          <b>{WAIT_LABELS[waiting.kind]}:</b> {waiting.what}
+          {waiting.since ? <span className="gb-muted"> · {relativeTime(waiting.since, now)}</span> : null}
+          {unblocks.length > 0 ? (
+            <>
+              <br />
+              <span className="gb-muted">{t("Al responder se desbloquean {ids}", { ids: unblocks.map((u) => u.identifier).join(", ") })}</span>
+            </>
+          ) : null}
+        </span>
+        {children}
+      </div>
+    );
+  }
+  const directBlocker = issue.blockerIds[0] ? index.byId.get(issue.blockerIds[0]) : undefined;
+  if (!directBlocker || !isOpenStatus(issue.status)) return null;
+  const waitBlocker = waitBlockerOf(index, issue);
+  return (
+    <div className="gb-peek-toca is-dep">
+      <Icon name="link" size={14} />
+      <span>
+        {waitBlocker && waitBlocker.id !== directBlocker.id
+          ? tx("Bloqueada por {id}, que espera a {waiting}.", {
+              id: <b className="gb-mono">{directBlocker.identifier}</b>,
+              waiting: <b className="gb-mono">{waitBlocker.identifier}</b>,
+            })
+          : tx("Bloqueada por {id}.", { id: <b className="gb-mono">{directBlocker.identifier}</b> })}
+        {waitBlocker ? (
+          <>
+            {" "}
+            {tx("{id} espera tu respuesta.", { id: <b>{waitBlocker.identifier}</b> })}
+          </>
+        ) : null}
+      </span>
+    </div>
+  );
+}
 
 export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: BoardIssue; anchor: DOMRect; now: number }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -186,10 +240,6 @@ export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: 
   left = Math.max(8, Math.min(left, window.innerWidth - PEEK_WIDTH - 8));
 
   const company = index.companyById.get(issue.companyId);
-  const waiting = index.waiting.get(issue.id);
-  const unblocks = waiting ? dependentsOf(index, [issue]) : [];
-  const waitBlocker = waitBlockerOf(index, issue);
-  const directBlocker = issue.blockerIds[0] ? index.byId.get(issue.blockerIds[0]) : undefined;
   const who = assigneeName(index, issue);
   const ancestors = ancestorsOf(index, issue);
   const kids = sortSubtasks(index, childrenOf(index, issue));
@@ -208,40 +258,7 @@ export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: 
           </span>
         </div>
         <div className="gb-pt">{issue.title}</div>
-        {waiting ? (
-          <div className="gb-peek-toca">
-            <TocaPill />
-            <span>
-              <b>{WAIT_LABELS[waiting.kind]}:</b> {waiting.what}
-              {waiting.since ? <span className="gb-muted"> · {relativeTime(waiting.since, now)}</span> : null}
-              {unblocks.length > 0 ? (
-                <>
-                  <br />
-                  <span className="gb-muted">Al responder se desbloquean {unblocks.map((u) => u.identifier).join(", ")}</span>
-                </>
-              ) : null}
-            </span>
-          </div>
-        ) : directBlocker && isOpenStatus(issue.status) ? (
-          <div className="gb-peek-toca is-dep">
-            <Icon name="link" size={14} />
-            <span>
-              Bloqueada por <b className="gb-mono">{directBlocker.identifier}</b>
-              {waitBlocker && waitBlocker.id !== directBlocker.id ? (
-                <>
-                  , que espera a <b className="gb-mono">{waitBlocker.identifier}</b>
-                </>
-              ) : null}
-              .
-              {waitBlocker ? (
-                <>
-                  {" "}
-                  <b>{waitBlocker.identifier}</b> espera tu respuesta.
-                </>
-              ) : null}
-            </span>
-          </div>
-        ) : null}
+        <WaitNote index={index} issue={issue} now={now} />
         <div className="gb-prow">
           <StatusIcon status={issue.status} />
           <b>{STATUS_LABELS[issue.status]}</b>
@@ -256,11 +273,11 @@ export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: 
         </div>
         <div className="gb-prow">
           <Avatar name={who} size={16} />
-          <b>{who ?? "Sin asignar"}</b>
+          <b>{who ?? t("Sin asignar")}</b>
         </div>
         <div className="gb-prow">
           <Icon name="clock" size={14} />
-          Actualizada {relativeTime(issue.updatedAt, now)}
+          {t("Actualizada {when}", { when: relativeTime(issue.updatedAt, now) })}
         </div>
         {issue.labels.length > 0 ? (
           <div className="gb-labels">
@@ -276,13 +293,13 @@ export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: 
           <div className="gb-tree">
             <div className="gb-tree-h">
               <Icon name="list-tree" size={12} />
-              <span>Árbol</span>
+              <span>{t("Árbol")}</span>
               {progress.total > 0 ? (
                 <>
                   <span className="gb-sp" />
                   <ProgressBar done={progress.done} total={progress.total} width={56} />
                   <span className="gb-tnum">
-                    {progress.done}/{progress.total} hechas
+                    {t("{done}/{total} hechas", { done: progress.done, total: progress.total })}
                   </span>
                 </>
               ) : null}
@@ -296,14 +313,14 @@ export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: 
             ))}
             {kids.length > 5 ? (
               <div className="gb-trmore" style={{ "--d": ancestors.length + 1 } as CSSProperties}>
-                y {kids.length - 5} subtareas más
+                {t("y {n} subtareas más", { n: kids.length - 5 })}
               </div>
             ) : null}
           </div>
         ) : null}
         <div className="gb-popen">
           <Icon name="external-link" size={12} />
-          Clic para abrir en {company?.name}
+          {t("Clic para abrirla aquí · Ctrl o ⌘ + clic: su página")}
         </div>
       </div>
     </Layer>

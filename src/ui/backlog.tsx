@@ -3,11 +3,13 @@
 // al otro (arrastrando o con el botón de la fila) solo cambia su estado.
 import { useMemo, useState, type DragEvent } from "react";
 import { relativeTime, sortIssues, type BoardIndex } from "../board.js";
+import { t } from "../i18n.js";
 import type { BoardIssue, IssueStatus } from "../shared.js";
 import { ContextChip, SubtaskCount, hrefFor } from "./card.js";
-import { Avatar, CompanyTag, PriorityIcon, StatusIcon, TocaPill, assigneeName, companyClass, companyStyle, cx, isOwnClick, openHref, plural } from "./common.js";
+import { Avatar, CompanyTag, PriorityIcon, StatusIcon, TocaPill, assigneeName, companyClass, companyStyle, cx, isOwnClick, plural } from "./common.js";
 import { CreateSlot, MarkPill, markClass, useMark } from "./create.js";
 import { Icon } from "./icons.js";
+import { useOpenTask } from "./open.js";
 
 const TODO_SHOWN = 8;
 const GROUP_SHOWN = 15;
@@ -79,22 +81,22 @@ export function BacklogView({
     <div className="gb-list gb-backlog" onDragEnd={() => setDropOn(null)}>
       <section
         className={cx("gb-lgrp is-plain gb-bktop", dragging?.status === "backlog" && "is-target", dropOn === "todo" && "gb-drop-on")}
-        aria-label="En el Board · Por hacer"
+        aria-label={t("En el Board · Por hacer")}
         {...zoneHandlers("todo")}
       >
         <div className="gb-grph gb-bkhead">
           <StatusIcon status="todo" />
-          <span className="gb-nm">En el Board · Por hacer</span>
+          <span className="gb-nm">{t("En el Board · Por hacer")}</span>
           <span className="gb-muted" style={{ fontSize: 12 }}>
             {plural(todo.length, "tarea", "tareas")}
           </span>
           <span className="gb-bkhint">
             <Icon name="arrow-up" size={12} />
-            Arrastra aquí lo próximo que quieres que entre al Board
+            {t("Arrastra aquí lo próximo que quieres que entre al Board")}
           </span>
         </div>
         {todo.length === 0 ? (
-          <div className="gb-bkempty">Nada en «Por hacer» con estos filtros. Arrastra una tarea del Backlog o usa su botón «Pasar a Por hacer».</div>
+          <div className="gb-bkempty">{t("Nada en «Por hacer» con estos filtros. Arrastra una tarea del Backlog o usa su botón «Pasar a Por hacer».")}</div>
         ) : (
           todo.slice(0, todoLimit).map((issue) => (
             <BacklogRow
@@ -113,7 +115,7 @@ export function BacklogView({
         {todo.length > todoLimit ? (
           <div className="gb-rowmore">
             <button type="button" className="gb-linkbtn" onClick={() => onMore(todoKey, todoLimit + MORE_STEP)}>
-              Ver {Math.min(MORE_STEP, todo.length - todoLimit)} más · quedan {todo.length - todoLimit}
+              {t("Ver {n} más · quedan {left}", { n: Math.min(MORE_STEP, todo.length - todoLimit), left: todo.length - todoLimit })}
             </button>
           </div>
         ) : null}
@@ -125,10 +127,10 @@ export function BacklogView({
       >
         <div className="gb-bktitle">
           <StatusIcon status="backlog" />
-          <b>Backlog</b>
-          <span className="gb-muted">{plural(backlogCount, "tarea", "tareas")} que todavía no entran al Board</span>
+          <b>{t("Backlog")}</b>
+          <span className="gb-muted">{t("{tasks} que todavía no entran al Board", { tasks: plural(backlogCount, "tarea", "tareas") })}</span>
         </div>
-        {groups.length === 0 ? <div className="gb-bkempty is-box">No hay tareas en el Backlog con estos filtros.</div> : null}
+        {groups.length === 0 ? <div className="gb-bkempty is-box">{t("No hay tareas en el Backlog con estos filtros.")}</div> : null}
         {groups.map(({ company, issues: rows }) => {
           const key = `bk:${company.id}`;
           const closed = collapsed.has(key);
@@ -145,7 +147,7 @@ export function BacklogView({
                 <span className="gb-muted" style={{ fontSize: 12 }}>
                   {plural(rows.length, "tarea", "tareas")}
                 </span>
-                {toca > 0 ? <TocaPill small label={`${toca} te ${toca === 1 ? "toca" : "tocan"}`} /> : null}
+                {toca > 0 ? <TocaPill small label={toca === 1 ? t("{n} te toca", { n: toca }) : t("{n} te tocan", { n: toca })} /> : null}
               </button>
               {closed ? null : (
                 <>
@@ -164,11 +166,11 @@ export function BacklogView({
                   {rows.length > limit ? (
                     <div className="gb-rowmore">
                       <button type="button" className="gb-linkbtn" onClick={() => onMore(key, limit + MORE_STEP)}>
-                        Ver {Math.min(MORE_STEP, rows.length - limit)} más · quedan {rows.length - limit}
+                        {t("Ver {n} más · quedan {left}", { n: Math.min(MORE_STEP, rows.length - limit), left: rows.length - limit })}
                       </button>
                     </div>
                   ) : null}
-                  <CreateSlot origin={{ surface: "group", status: "backlog", by: "empresa", key: company.id }} groupLabel={`el Backlog de ${company.name}`} />
+                  <CreateSlot origin={{ surface: "group", status: "backlog", by: "empresa", key: company.id }} groupLabel={t("el Backlog de {company}", { company: company.name })} />
                 </>
               )}
             </section>
@@ -201,9 +203,10 @@ function BacklogRow({
   const href = hrefFor(index, issue);
   const who = assigneeName(index, issue);
   const mark = useMark(issue.id);
+  const openTask = useOpenTask();
   const toTodo = issue.status === "backlog";
   const hot = issue.priority === "critical" || issue.priority === "high";
-  const moveLabel = toTodo ? "Pasar a Por hacer" : "Devolver al Backlog";
+  const moveLabel = toTodo ? t("Pasar a Por hacer") : t("Devolver al Backlog");
   return (
     <div
       data-iid={issue.id}
@@ -216,7 +219,7 @@ function BacklogRow({
       }}
       onDragEnd={onDragEnd}
       onClick={(event) => {
-        if (isOwnClick(event)) openHref(href, event);
+        if (isOwnClick(event)) openTask.row(issue, href, event);
       }}
     >
       <StatusIcon status={issue.status} />
@@ -225,7 +228,7 @@ function BacklogRow({
         <span className="gb-mono">{issue.identifier}</span>
       </span>
       <span className="gb-t">
-        <a className="gb-tt gb-cover" href={href} draggable={false} title={issue.title} aria-label={`${issue.identifier ?? ""} ${issue.title}`}>
+        <a className="gb-tt gb-cover" href={href} draggable={false} title={issue.title} aria-label={`${issue.identifier ?? ""} ${issue.title}`} onClick={openTask.link(issue)}>
           {issue.title}
         </a>
         <MarkPill mark={mark} />
@@ -238,9 +241,9 @@ function BacklogRow({
         <Avatar name={who} size={20} />
       </span>
       <span className="gb-upd">{relativeTime(issue.updatedAt, now)}</span>
-      <button type="button" className="gb-bkmove" title={moveLabel} aria-label={`${moveLabel}: ${issue.identifier ?? issue.title}`} onClick={() => onMove(issue, toTodo ? "todo" : "backlog")}>
+      <button type="button" className="gb-bkmove" title={moveLabel} aria-label={t("{action}: {task}", { action: moveLabel, task: issue.identifier ?? issue.title })} onClick={() => onMove(issue, toTodo ? "todo" : "backlog")}>
         <Icon name={toTodo ? "arrow-up" : "arrow-down"} size={14} />
-        <span>{toTodo ? "Por hacer" : "Backlog"}</span>
+        <span>{toTodo ? t("Por hacer") : t("Backlog")}</span>
       </button>
     </div>
   );

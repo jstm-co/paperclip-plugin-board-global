@@ -207,6 +207,17 @@ export interface IssueComment {
   authorAgentId: string | null;
   authorUserId: string | null;
   createdAt: string;
+  deletedAt?: string | null;
+}
+
+/**
+ * Tarea de `GET /api/issues/:id`, con lo que el modal de tarea (JST-408) no
+ * tiene en la lista del worker.
+ */
+export interface IssueDetail {
+  id: string;
+  description: string | null;
+  createdAt: string;
 }
 
 /** Evento de `GET /api/companies/:id/activity`. */

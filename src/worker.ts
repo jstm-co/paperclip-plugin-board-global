@@ -1,5 +1,6 @@
 import { definePlugin, runWorker } from "@paperclipai/plugin-sdk";
 import type { Issue, PluginContext } from "@paperclipai/plugin-sdk";
+import { SOURCE_LOCALE, isLocale, setLocale, t } from "./i18n.js";
 import { CONFIRM_STATE_KEY, applyConfirmOp, initialConfirmations, parseConfirmIds, parseConfirmations, type Confirmations } from "./confirm.js";
 import {
   CONFIRM_ACTIONS,
@@ -12,9 +13,18 @@ import {
 } from "./shared.js";
 import { VIEWS_STATE_KEY, applyViewOp, parseStoredViews, parseViewOp, storedViews, type SavedView, type ViewOp, type ViewOpResult } from "./views.js";
 
+/**
+ * El worker no tiene idioma propio: cada acción trae el de quien la pide
+ * (`params.locale`, JST-409). Se fija justo antes de validar o aplicar, que es
+ * código sin esperas, así que el mensaje de un rechazo sale en ese idioma.
+ */
+function useLocaleOf(params: Record<string, unknown>): void {
+  setLocale(isLocale(params.locale) ? params.locale : SOURCE_LOCALE);
+}
+
 function requireCompanyId(value: unknown): string {
   if (typeof value !== "string" || value.length === 0) {
-    throw new Error("companyId es obligatorio: llama al bridge con la empresa a consultar");
+    throw new Error(t("companyId es obligatorio: llama al bridge con la empresa a consultar"));
   }
   return value;
 }
@@ -73,9 +83,12 @@ function registerSavedViews(ctx: PluginContext) {
 
   for (const op of Object.keys(VIEW_ACTIONS) as Array<ViewOp["op"]>) {
     ctx.actions.register(VIEW_ACTIONS[op], async (params): Promise<ViewOpResult> => {
+      useLocaleOf(params);
       const request = parseViewOp(op, params);
       return serialized(async () => {
-        const result = applyViewOp(await read(), request);
+        const views = await read();
+        useLocaleOf(params);
+        const result = applyViewOp(views, request);
         if (result.ok) {
           // Paperclip 2026.824.1: en el estado de instancia `scope_id` es NULL y el
           // índice único no lo ve como conflicto, así que `set` agrega otra fila y
@@ -120,6 +133,7 @@ function registerConfirmations(ctx: PluginContext) {
 
   for (const op of Object.keys(CONFIRM_ACTIONS) as Array<keyof typeof CONFIRM_ACTIONS>) {
     ctx.actions.register(CONFIRM_ACTIONS[op], async (params): Promise<Confirmations> => {
+      useLocaleOf(params);
       const ids = parseConfirmIds(params);
       return serialized(async () => {
         const next = applyConfirmOp(await read(), op, ids, Date.now());
@@ -138,12 +152,16 @@ const plugin = definePlugin({
     // `params.companyId` lo inyecta el host: es la empresa autorizada para esta
     // invocación. Leer otra empresa aquí lo rechaza el host (INVOCATION_SCOPE_DENIED).
     ctx.data.register(DATA_COMPANY_ISSUES, async (params): Promise<CompanyIssues> => {
+      useLocaleOf(params);
       const companyId = requireCompanyId(params.companyId);
       const startedAt = Date.now();
       // Sin limit/offset: el host aplica la ventana dos veces y la paginación con
       // offset > 0 devuelve resultados incorrectos (ver nota técnica del spike).
       const [company, issues] = await Promise.all([ctx.companies.get(companyId), ctx.issues.list({ companyId })]);
-      if (!company) throw new Error(`Empresa no encontrada: ${companyId}`);
+      if (!company) {
+        useLocaleOf(params);
+        throw new Error(t("Empresa no encontrada: {id}", { id: companyId }));
+      }
       return {
         companyId,
         name: company.name,

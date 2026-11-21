@@ -24,6 +24,7 @@ import {
   type LaneBy,
 } from "../board.js";
 import { pendingConfirmation } from "../confirm.js";
+import { localeTag, t } from "../i18n.js";
 import { pedidoRows } from "../pedidos.js";
 import { PAGE_ROUTE, isOpenStatus, type BoardIssue, type IssueStatus } from "../shared.js";
 import { BacklogView } from "./backlog.js";
@@ -32,13 +33,16 @@ import { Peek } from "./card.js";
 import { CreateProvider, MarksProvider, useCreateFlow, useMarks } from "./create.js";
 import { STATUS_LABELS, plural, useNow } from "./common.js";
 import { FilterBar } from "./filters.js";
+import { tx } from "./i18n.js";
 import { Header } from "./header.js";
 import { BoardSkeleton, LaneBoard, badDropMessage, boardLanes, laneUiKey } from "./lanes.js";
 import { ToastStack, useToasts } from "./layer.js";
 import { ListView } from "./list.js";
+import { OpenTaskProvider } from "./open.js";
 import { EmptyPedidos, PedidosView } from "./pedidos.js";
 import { EmptyResults, LoadFailed, PartialErrorBanner, TocaBanner } from "./states.js";
 import { ensureStyles } from "./styles.js";
+import { TaskModal } from "./task.js";
 import { useBoardData } from "./useBoardData.js";
 import { useConfirmations } from "./useConfirmations.js";
 import { useLiveRuns } from "./usePedidos.js";
@@ -80,7 +84,7 @@ export function BoardGlobalSidebarLink(_props: PluginSidebarProps) {
       <span className="relative shrink-0">
         <KanbanIcon />
       </span>
-      <span className="flex-1 truncate">Board global</span>
+      <span className="flex-1 truncate">{t("Board global")}</span>
     </a>
   );
 }
@@ -100,12 +104,12 @@ export function BoardGlobalToolbarButton() {
     <a
       {...navigation.linkProps(`/${PAGE_ROUTE}`)}
       aria-current={active ? "page" : undefined}
-      aria-label="Board global"
-      title="Board global: las tareas de todas las empresas"
+      aria-label={t("Board global")}
+      title={t("Board global: las tareas de todas las empresas")}
       className={`gb-layer gb-tb${active ? " is-on" : ""}`}
     >
       <KanbanIcon />
-      <span className="gb-tb-lbl">Board global</span>
+      <span className="gb-tb-lbl">{t("Board global")}</span>
     </a>
   );
 }
@@ -312,6 +316,17 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
     peekTimer.current = window.setTimeout(() => setPeek({ issueId: issue.id, rect: element.getBoundingClientRect() }), PEEK_DELAY_MS);
   }, []);
 
+  // Modal de tarea (JST-408): el clic en una tarjeta o fila la abre aquí, sin salir del Board.
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const openTask = useCallback(
+    (issue: BoardIssue) => {
+      onPeek(null);
+      setTaskId(issue.id);
+    },
+    [onPeek],
+  );
+  const closeTask = useCallback(() => setTaskId(null), []);
+
   // Arrastrar y soltar: actualización optimista + PATCH nativo + toast con «Deshacer».
   const [dragging, setDragging] = useState<BoardIssue | null>(null);
   const onDragStart = useCallback((issue: BoardIssue) => setDragging(issue), []);
@@ -319,7 +334,7 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
 
   const idLabel = (issue: BoardIssue) => (
     <b className="gb-mono" style={{ fontWeight: 500 }}>
-      {issue.identifier ?? "La tarea"}
+      {issue.identifier ?? t("La tarea")}
     </b>
   );
 
@@ -333,21 +348,17 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
         await confirmIds(ids);
         toast({
           content:
-            issues.length === 1 ? (
-              <>
-                {idLabel(issues[0]!)} confirmada · queda en {STATUS_LABELS[issues[0]!.status]}
-              </>
-            ) : (
-              `${issues.length} tareas confirmadas`
-            ),
+            issues.length === 1
+              ? tx("{id} confirmada · queda en {status}", { id: idLabel(issues[0]!), status: STATUS_LABELS[issues[0]!.status] })
+              : t("{n} tareas confirmadas", { n: issues.length }),
           action: {
-            label: "Deshacer",
+            label: t("Deshacer"),
             run: () =>
-              void unconfirmIds(ids).catch((err: Error) => toast({ error: true, content: `No se pudo deshacer la confirmación: ${err.message}` })),
+              void unconfirmIds(ids).catch((err: Error) => toast({ error: true, content: t("No se pudo deshacer la confirmación: {message}", { message: err.message }) })),
           },
         });
       } catch (err) {
-        toast({ error: true, content: `No se pudo confirmar: ${(err as Error).message}` });
+        toast({ error: true, content: t("No se pudo confirmar: {message}", { message: (err as Error).message }) });
       }
     },
     [confirmIds, unconfirmIds, toast],
@@ -355,7 +366,7 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
   const onConfirm = useCallback((issue: BoardIssue) => void confirmIssues([issue]), [confirmIssues]);
 
   const move = async (issue: BoardIssue, from: IssueStatus, to: IssueStatus, undo: boolean) => {
-    const label = issue.identifier ?? "la tarea";
+    const label = issue.identifier ?? t("la tarea");
     // Si la cierra la persona desde el board, no hace falta que después la confirme. Al
     // deshacer una reapertura sí vuelve a «Por confirmar», como estaba.
     const selfClose = !undo && !isOpenStatus(to) && !issue.parentId && confirmations.state !== null;
@@ -366,20 +377,27 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
       // Después del cambio de estado: la confirmación tiene que quedar con hora posterior al cierre.
       if (selfClose && status === to) await confirmIds([issue.id]).catch(() => undefined);
       if (selfClose) settle();
+      const idNode = (
+        <b className="gb-mono" style={{ fontWeight: 500 }}>
+          {label}
+        </b>
+      );
       toast({
         content: (
           <>
-            <b className="gb-mono" style={{ fontWeight: 500 }}>
-              {label}
-            </b>{" "}
-            {undo ? "volvió a" : "movida a"} {STATUS_LABELS[status]}
+            {undo
+              ? tx("{id} volvió a {status}", { id: idNode, status: STATUS_LABELS[status] })
+              : tx("{id} movida a {status}", { id: idNode, status: STATUS_LABELS[status] })}
           </>
         ),
-        action: undo ? undefined : { label: "Deshacer", run: () => void move(issue, status, from, true) },
+        action: undo ? undefined : { label: t("Deshacer"), run: () => void move(issue, status, from, true) },
       });
     } catch (err) {
       if (selfClose) settle();
-      toast({ error: true, content: `No se pudo ${undo ? "deshacer el cambio de" : "mover"} ${label}: ${(err as Error).message}` });
+      toast({ error: true, content: undo
+          ? t("No se pudo deshacer el cambio de {task}: {message}", { task: label, message: (err as Error).message })
+          : t("No se pudo mover {task}: {message}", { task: label, message: (err as Error).message }),
+      });
     }
   };
   const onDrop = (status: IssueStatus) => {
@@ -408,16 +426,18 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
     void confirmations.reload();
     const result = await data.refresh();
     if (!result) return;
-    const seconds = (result.elapsedMs / 1000).toLocaleString("es-CL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-    toast({ content: `Board actualizado · ${plural(result.ok, "empresa", "empresas")} en ${seconds} s` });
+    const seconds = (result.elapsedMs / 1000).toLocaleString(localeTag(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    toast({ content: t("Board actualizado · {companies} en {seconds} s", { companies: plural(result.ok, "empresa", "empresas"), seconds }) });
   };
 
   const peekIssue = peek && index ? index.byId.get(peek.issueId) : undefined;
+  const taskIssue = taskId && index ? index.byId.get(taskId) : undefined;
   const shown = inBoard ? boardIssues : inBacklog ? backlogIssues : filtered;
 
   return (
     <CreateProvider value={create}>
     <MarksProvider value={marks}>
+    <OpenTaskProvider value={openTask}>
     <div ref={rootRef} className="gb" style={{ height }} onScrollCapture={() => onPeek(null)}>
       <Header
         loading={loading}
@@ -516,9 +536,24 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
         />
       )}
 
-      {peekIssue && peek && !dragging ? <Peek index={index!} issue={peekIssue} anchor={peek.rect} now={now} /> : null}
+      {peekIssue && peek && !dragging && !taskIssue ? <Peek index={index!} issue={peekIssue} anchor={peek.rect} now={now} /> : null}
+      {taskIssue ? (
+        <TaskModal
+          index={index!}
+          issue={taskIssue}
+          now={now}
+          userId={userId}
+          pending={pending.has(taskIssue.id)}
+          onClose={closeTask}
+          onOpen={openTask}
+          onMove={(issue, to) => void move(issue, issue.status, to, false)}
+          onConfirm={onConfirm}
+          onCommented={(issue) => void refreshCompany(issue.companyId)}
+        />
+      ) : null}
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>
+    </OpenTaskProvider>
     </MarksProvider>
     </CreateProvider>
   );

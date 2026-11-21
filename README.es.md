@@ -38,6 +38,7 @@ Plugin para [Paperclip](https://github.com/paperclipai/paperclip) que junta toda
   - La **búsqueda** encuentra por ID, título o empresa, sin distinguir tildes ni mayúsculas. Una tarea aparece si el texto está en su ID o en su título, o si el nombre de su empresa, una palabra del nombre o su prefijo empieza con el texto. La parte de empresa pide al menos 3 caracteres y no busca dentro del nombre: `corp` no trae todo «Betacorp».
 - **Arrastrar** una tarjeta a otra columna cambia el estado con `PATCH /api/issues/:id`, igual que el kanban nativo. El aviso ofrece «Deshacer». Si la API rechaza el cambio, la tarjeta vuelve a su lugar.
 - **Crear tareas:** «+ Crear» en cada celda de las columnas Por hacer y En curso abre un compositor en el mismo lugar: escribes el título y Enter. Hay lo mismo en una fila «Nueva tarea en…» al pie de cada grupo de la Lista y del Backlog, y en el botón «Crear tarea» de la cabecera. Empresa, proyecto, responsable y prioridad salen del carril, el grupo o el filtro activo; si no hay empresa de partida, se elige. Asignar a un agente lo despierta (salvo en Backlog) y el compositor lo avisa; En curso exige responsable, así que parte en «Yo». Usa `POST /api/companies/:id/issues` con tu sesión, sin permisos nuevos. Un título ya abierto en las últimas 48 horas no se crea dos veces (el servidor devuelve la existente y el board la marca).
+- **Modal de tarea:** el clic en una tarjeta o en una fila abre la tarea encima del board, sin salir de la página: descripción, subtareas, comentarios (puedes escribir uno), cambio de estado y, si la tarea está en «Por confirmar», su botón «Confirmar». Al abrirla queda leída, igual que en su página. Las subtareas, las tareas padre y los bloqueadores se abren en el mismo modal. Ctrl o ⌘ + clic (y los demás gestos del navegador) siguen yendo a la página de la tarea, igual que el enlace «Página completa» del modal; allá están los documentos, las corridas y las aprobaciones.
 - **Vista previa** al pasar el mouse 450 ms sobre una tarjeta: detalle, «Te toca» y árbol de la tarea.
 - **Carga por empresa:** si una empresa no responde, el resto del board sigue funcionando y esa empresa se puede reintentar sola.
 - **Colores de empresa:** si la empresa tiene color de marca en Paperclip («Brand color» en sus ajustes), se usa ese. Si no, las 4 primeras por orden alfabético del nombre toman uno de 4 colores fijos y desde la quinta quedan en gris. El prefijo siempre va junto al color.
@@ -118,6 +119,14 @@ Son los mismos datos que usa el Dashboard nativo, pedidos para cada empresa con 
 | Agentes en vivo | `GET /api/companies/:id/live-runs?minCount=4` |
 | Actividad reciente | `GET /api/companies/:id/activity?limit=10` |
 
+## Idiomas
+
+La interfaz viene en **español** e **inglés**. Sigue el idioma del navegador (cualquier otro idioma queda en inglés) y el botón con el globo, en la cabecera de las dos páginas, deja elegir uno; la elección se guarda en ese navegador. Las fechas y los números siguen el idioma de la interfaz.
+
+No se traducen el nombre del plugin en el administrador de plugins de Paperclip ni los valores de la URL (`v=lista`, `carr=empresa`…).
+
+Para sumar un idioma, copia `src/i18n/en/` a `src/i18n/<código>/`, traduce los valores (las claves son los textos en español del código y quedan como están) y regístralo en `LOCALES` y `CATALOGS` de `src/i18n.ts`. `npm test` revisa que cada catálogo tenga todos los textos que usa el código, ninguno que no use y los mismos `{marcadores}`.
+
 ## Requisitos
 
 - Paperclip `2026.824.1` o compatible.
@@ -191,13 +200,14 @@ npx paperclipai plugin uninstall jstm.board-global --force    # borra todo, incl
 | `ui.action.register` | El botón «Board global» de la barra de arriba. |
 
 - El plugin no llama a servicios externos: todo va a la API de tu propia instancia de Paperclip.
-- Proyectos, agentes, el Inbox («Te toca»), el Dashboard, el cambio de estado al arrastrar y, en la vista Pedidos, las corridas activas y el último comentario de cada pedido usan la API nativa con la sesión del usuario que mira la página. Así se aplican las mismas reglas y permisos del núcleo.
+- Proyectos, agentes, el Inbox («Te toca»), el Dashboard, el cambio de estado al arrastrar, el modal de tarea (descripción, comentarios, comentar y marcar la tarea como leída) y, en la vista Pedidos, las corridas activas y el último comentario de cada pedido usan la API nativa con la sesión del usuario que mira la página. Así se aplican las mismas reglas y permisos del núcleo.
 - Las vistas guardadas y las confirmaciones son de toda la instancia: no son por usuario.
 
 ## Límites conocidos
 
 - **«Te toca»** necesita una sesión de usuario en el navegador. Si el Inbox no se puede leer, el filtro rápido queda deshabilitado.
 - **«Por confirmar»** no sabe quién cerró una tarea: una que cerraste tú fuera del board, en las páginas de Paperclip, también aparece ahí.
+- **Modal de tarea:** muestra los últimos 50 comentarios y no edita el título, la descripción, el responsable ni la prioridad; las aprobaciones, los documentos y las corridas están en la página de la tarea.
 - **Personas asignadas:** el SDK no expone sus nombres. `local-board` aparece como «Board» y otras personas como «Persona» con un id corto.
 - **Enlaces a otras empresas:** abrir una tarea de otra empresa recarga la app, porque la navegación del host antepone la empresa activa.
 - **Paginación:** cada empresa se pide completa (en Paperclip `2026.824.1`, `ctx.issues.list` con `offset` devuelve vacío). Con unas 400 tareas por empresa tarda unos 65 ms en el worker.
@@ -216,7 +226,7 @@ npm test            # pruebas de la lógica del board, del dashboard y del worke
 npm run typecheck
 ```
 
-Las pruebas cubren lo que no depende de React: estado en la URL, filtros y conteos, filtro de fecha, orden, filtros rápidos, «Te toca», árbol de subtareas, agrupación, carriles, columnas del board, la vista Backlog, «Por confirmar», colores de empresa, vistas guardadas, la vista Pedidos (subárbol, quién tiene la pelota, búsqueda por subtarea, títulos ocultos y última novedad) y los campos que entrega el worker. En el Dashboard: totales, % de presupuesto, gráficos de 14 días, orden de la comparativa, filtro de empresa, formatos y el texto de la actividad.
+Las pruebas cubren lo que no depende de React: estado en la URL, filtros y conteos, filtro de fecha, orden, filtros rápidos, «Te toca», árbol de subtareas, agrupación, carriles, columnas del board, la vista Backlog, «Por confirmar», el modal de tarea (qué clics lo abren, orden y autores de los comentarios), colores de empresa, vistas guardadas, la vista Pedidos (subárbol, quién tiene la pelota, búsqueda por subtarea, títulos ocultos y última novedad) y los campos que entrega el worker. En el Dashboard: totales, % de presupuesto, gráficos de 14 días, orden de la comparativa, filtro de empresa, formatos y el texto de la actividad.
 
 Paperclip sirve la interfaz desde `dist/ui/` de la carpeta instalada en cada carga de página: un build en esa carpeta cambia lo que ve el usuario aunque no ejecutes `upgrade`. Si desarrollas sobre una instancia que usas a diario, instala desde una copia aparte.
 
@@ -228,6 +238,7 @@ Paperclip sirve la interfaz desde `dist/ui/` de la carpeta instalada en cada car
 | Worker | `src/worker.ts` | Dato `company-issues`: las tareas de **una** empresa con solo los campos del board. Dato `saved-views` y acciones `view-create`, `view-rename`, `view-update` y `view-delete` para las vistas guardadas, de a una operación. Dato `confirmations` y acciones `confirm-add` y `confirm-remove` para «Por confirmar». |
 | Lógica del Board | `src/board.ts` | URL, índice multiempresa, colores, filtros, orden, «Te toca», árbol, agrupación, carriles y columnas del board. Sin React. |
 | «Por confirmar» | `src/confirm.ts`, `src/ui/useConfirmations.ts` | Qué tareas raíz cerradas esperan confirmación, y las operaciones de confirmar y deshacer. |
+| Modal de tarea | `src/task.ts`, `src/ui/task.tsx`, `src/ui/open.tsx` | Qué clics abren el modal, autores y orden de los comentarios, y el modal con su descripción, subtareas y comentarios. |
 | Lógica de Pedidos | `src/pedidos.ts` | Subárbol de cada tarea raíz, avance completo, quién tiene la pelota, qué pedidos se ven con cada filtro y la primera línea de un comentario. Sin React. |
 | Vistas guardadas | `src/views.ts`, `src/ui/views.tsx`, `src/ui/useSavedViews.ts` | Nombres, nombre sugerido, pestaña marcada, operaciones del worker y escrituras optimistas. |
 | Datos de la UI | `src/ui/useBoardData.ts`, `src/ui/useDashboardData.ts`, `src/ui/usePedidos.ts`, `src/ui/bridge.ts` | Carga en paralelo por empresa, reintento y cambio de estado. En Pedidos, corridas activas y último comentario. |

@@ -1,18 +1,19 @@
 // Piezas visuales compartidas (design-spec §3 y §6): etiquetas de empresa,
 // iconos de estado y prioridad, avatar, «Te toca» y barra de avance.
 import { useEffect, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type KeyboardEvent } from "react";
+import { t } from "../i18n.js";
 import { assigneeKey, assigneeLabel, type BoardCompany, type BoardIndex } from "../board.js";
 import type { BoardIssue, IssuePriority, IssueStatus } from "../shared.js";
 import { Icon, type IconName } from "./icons.js";
 
 export const STATUS_LABELS: Record<IssueStatus, string> = {
   backlog: "Backlog",
-  todo: "Por hacer",
-  in_progress: "En curso",
-  in_review: "En revisión",
-  blocked: "Bloqueada",
-  done: "Hecha",
-  cancelled: "Cancelada",
+  todo: t("Por hacer"),
+  in_progress: t("En curso"),
+  in_review: t("En revisión"),
+  blocked: t("Bloqueada"),
+  done: t("Hecha"),
+  cancelled: t("Cancelada"),
 };
 
 export const STATUS_ICONS: Record<IssueStatus, IconName> = {
@@ -26,10 +27,10 @@ export const STATUS_ICONS: Record<IssueStatus, IconName> = {
 };
 
 export const PRIORITY_LABELS: Record<IssuePriority, string> = {
-  critical: "Crítica",
-  high: "Alta",
-  medium: "Media",
-  low: "Baja",
+  critical: t("Crítica"),
+  high: t("Alta"),
+  medium: t("Media"),
+  low: t("Baja"),
 };
 
 export const PRIORITY_ICONS: Record<IssuePriority, IconName> = {
@@ -45,9 +46,8 @@ export function cx(...names: Array<string | false | null | undefined>): string {
   return names.filter(Boolean).join(" ");
 }
 
-export function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
+// `plural(n, "tarea", "tareas")` → «3 tareas», ya en el idioma de la interfaz.
+export { plural } from "../i18n.js";
 
 // ---------------------------------------------------------------------------
 // Empresa: prefijo + color (nunca solo color)
@@ -102,7 +102,7 @@ export function PriorityIcon({ priority, size = 14, muted = false }: { priority:
     <span
       className="gb-pr gb-ic"
       style={{ "--prc": muted ? "var(--gb-subtle-fg)" : `var(--gb-pr-${priority})` } as CSSProperties}
-      title={`Prioridad ${PRIORITY_LABELS[priority].toLowerCase()}`}
+      title={t("Prioridad {level}", { level: PRIORITY_LABELS[priority].toLowerCase() })}
     >
       <Icon name={PRIORITY_ICONS[priority]} size={size} />
     </span>
@@ -156,7 +156,7 @@ export function assigneeName(index: BoardIndex, issue: BoardIssue): string | nul
 
 export function Avatar({ name, size = 20 }: { name: string | null; size?: number }) {
   if (!name) {
-    return <span className="gb-avatar is-none" style={{ width: size, height: size }} title="Sin asignar" />;
+    return <span className="gb-avatar is-none" style={{ width: size, height: size }} title={t("Sin asignar")} />;
   }
   return (
     <span className="gb-avatar" style={{ width: size, height: size, fontSize: Math.round(size * 0.45) }} title={name}>
@@ -170,11 +170,11 @@ export function Avatar({ name, size = 20 }: { name: string | null; size?: number
 // ---------------------------------------------------------------------------
 
 /** Pastilla invertida, como el contador del Inbox de Paperclip. Siempre icono + texto, salvo la versión icono. */
-export function TocaPill({ label = "Te toca", small = false, iconOnly = false }: { label?: string; small?: boolean; iconOnly?: boolean }) {
+export function TocaPill({ label = t("Te toca"), small = false, iconOnly = false }: { label?: string; small?: boolean; iconOnly?: boolean }) {
   return (
-    <span className={cx("gb-toca", small && "is-sm", iconOnly && "is-icon")} title={iconOnly ? "Te toca responder" : undefined}>
+    <span className={cx("gb-toca", small && "is-sm", iconOnly && "is-icon")} title={iconOnly ? t("Te toca responder") : undefined}>
       <Icon name="reply" size={12} />
-      {iconOnly ? <span className="gb-sr">Te toca responder</span> : label}
+      {iconOnly ? <span className="gb-sr">{t("Te toca responder")}</span> : label}
     </span>
   );
 }
@@ -182,7 +182,7 @@ export function TocaPill({ label = "Te toca", small = false, iconOnly = false }:
 export function ProgressBar({ done, total, width = 48 }: { done: number; total: number; width?: number }) {
   if (total === 0) return null;
   return (
-    <span className="gb-prog" style={{ width }} title={`${done} de ${total} hechas`}>
+    <span className="gb-prog" style={{ width }} title={t("{done} de {total} hechas", { done, total })}>
       <i style={{ width: `${Math.round((100 * done) / total)}%` }} />
     </span>
   );
