@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 import { relativeTime, userLabel } from "../board.js";
 import { activityVerb, durationLabel, type ActivityRow, type DashboardModel, type LiveRunRow, type RecentTaskRow } from "../dashboard.js";
+import { t } from "../i18n.js";
 import { Avatar, CompanyTag, LABELS, Skeleton, StatusIcon, cx } from "./common.js";
 import { Icon } from "./icons.js";
 
@@ -31,15 +32,17 @@ function LiveRow({ row, now }: { row: LiveRunRow; now: number }) {
   const failed = FAILED_RUN_STATUSES.has(run.status);
   const when = row.isActive ? (
     <span className="gb-when is-live">
-      {run.status === "queued" ? "En cola" : "En vivo"} · {durationLabel(run.startedAt ?? run.createdAt, now)}
+      {run.status === "queued"
+        ? t("En cola · {time}", { time: durationLabel(run.startedAt ?? run.createdAt, now) })
+        : t("En vivo · {time}", { time: durationLabel(run.startedAt ?? run.createdAt, now) })}
     </span>
   ) : failed ? (
-    <span className="gb-when is-fail">Falló {relativeTime(finishedAt(row), now)}</span>
+    <span className="gb-when is-fail">{t("Falló {time}", { time: relativeTime(finishedAt(row), now) })}</span>
   ) : (
-    <span className="gb-when">Terminó {relativeTime(finishedAt(row), now)}</span>
+    <span className="gb-when">{t("Terminó {time}", { time: relativeTime(finishedAt(row), now) })}</span>
   );
   return (
-    <a className="gb-lrow" href={row.runHref} title={`Abrir el run de ${run.agentName}`}>
+    <a className="gb-lrow" href={row.runHref} title={t("Abrir el run de {name}", { name: run.agentName })}>
       <span className={cx("gb-rdot", row.isActive && "is-live", failed && "is-fail")} />
       <Avatar name={run.agentName} size={20} />
       <span className="gb-l1">
@@ -54,7 +57,7 @@ function LiveRow({ row, now }: { row: LiveRunRow; now: number }) {
             <span className="gb-id">{row.issue.identifier}</span> {row.issue.title ?? ""}
           </>
         ) : (
-          "Sin tarea"
+          t("Sin tarea")
         )}
       </span>
     </a>
@@ -70,7 +73,7 @@ function LiveColumn({ model, now }: { model: DashboardModel; now: number }) {
   const lastRun = recent[0];
   return (
     <div>
-      <Section title="Agentes en vivo" meta={active.length > 0 ? `${active.length} corriendo` : undefined} />
+      <Section title={t("Agentes en vivo")} meta={active.length > 0 ? t("{n} corriendo", { n: active.length }) : undefined} />
       <div className="gb-feed">
         {active.map((row) => (
           <LiveRow key={row.run.id} row={row} now={now} />
@@ -79,12 +82,12 @@ function LiveColumn({ model, now }: { model: DashboardModel; now: number }) {
           <div className="gb-mempty">
             <Icon name="bot" size={14} />
             <div>
-              <b>Ningún agente trabajando ahora</b>
-              {lastRun ? <span>Último run {relativeTime(finishedAt(lastRun), now)}.</span> : null}
+              <b>{t("Ningún agente trabajando ahora")}</b>
+              {lastRun ? <span>{t("Último run {time}.", { time: relativeTime(finishedAt(lastRun), now) })}</span> : null}
             </div>
           </div>
         ) : null}
-        {shown.length > 0 ? <div className="gb-subhd">Recientes</div> : null}
+        {shown.length > 0 ? <div className="gb-subhd">{t("Recientes")}</div> : null}
         {shown.map((row) => (
           <LiveRow key={row.run.id} row={row} now={now} />
         ))}
@@ -134,7 +137,7 @@ function TaskRowView({ row, now }: { row: RecentTaskRow; now: number }) {
         <span className="gb-id">{issue.identifier ?? issue.id.slice(0, 8)}</span>
         <span className="gb-who">
           <Avatar name={who} size={16} />
-          <span>{who ?? "Sin asignar"}</span>
+          <span>{who ?? t("Sin asignar")}</span>
         </span>
         <span className="gb-when">{relativeTime(issue.updatedAt, now)}</span>
       </span>
@@ -161,7 +164,7 @@ export function Feeds({ model, loading, now }: { model: DashboardModel; loading:
   if (loading) {
     return (
       <div className="gb-cbottom">
-        {["Agentes en vivo", "Actividad reciente", "Tareas recientes"].map((title) => (
+        {[t("Agentes en vivo"), t("Actividad reciente"), t("Tareas recientes")].map((title) => (
           <div key={title}>
             <Section title={title} />
             <SkeletonFeed />
@@ -174,22 +177,22 @@ export function Feeds({ model, loading, now }: { model: DashboardModel; loading:
     <div className="gb-cbottom">
       <LiveColumn model={model} now={now} />
       <div>
-        <Section title="Actividad reciente" />
+        <Section title={t("Actividad reciente")} />
         <div className="gb-feed">
           {model.recentActivity.length > 0 ? (
             model.recentActivity.map((row) => <ActivityRowView key={`${row.company.id}:${row.event.id}`} row={row} now={now} />)
           ) : (
-            <div className="gb-fempty">Sin actividad.</div>
+            <div className="gb-fempty">{t("Sin actividad.")}</div>
           )}
         </div>
       </div>
       <div>
-        <Section title="Tareas recientes" />
+        <Section title={t("Tareas recientes")} />
         <div className="gb-feed">
           {model.recentTasks.length > 0 ? (
             model.recentTasks.map((row) => <TaskRowView key={row.issue.id} row={row} now={now} />)
           ) : (
-            <div className="gb-fempty">Sin tareas recientes.</div>
+            <div className="gb-fempty">{t("Sin tareas recientes.")}</div>
           )}
         </div>
       </div>

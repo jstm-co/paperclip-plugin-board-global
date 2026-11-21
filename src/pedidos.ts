@@ -12,6 +12,7 @@ import {
   type BoardQuery,
 } from "./board.js";
 import { OPEN_STATUSES, isOpenStatus, type BoardIssue, type IssueStatus, type LiveRun } from "./shared.js";
+import { t } from "./i18n.js";
 
 // ---------------------------------------------------------------------------
 // Subárbol
@@ -77,29 +78,29 @@ export const PEDIDO_STATES = ["toca", "cerrar", "bloqueado", "espera", "pausa", 
 export type PedidoState = (typeof PEDIDO_STATES)[number];
 
 export const PEDIDO_LABELS: Record<PedidoState, string> = {
-  toca: "Te toca a ti",
-  cerrar: "Listo para cerrar",
-  bloqueado: "Bloqueado",
-  espera: "Espera otra tarea",
-  pausa: "En pausa",
-  sueltos: "Cerrado con pendientes",
-  trabajando: "Trabajando ahora",
-  curso: "En curso",
-  nuevo: "Sin empezar",
-  cerrado: "Cerrado",
+  toca: t("Te toca a ti"),
+  cerrar: t("Listo para cerrar"),
+  bloqueado: t("Bloqueado"),
+  espera: t("Espera otra tarea"),
+  pausa: t("En pausa"),
+  sueltos: t("Cerrado con pendientes"),
+  trabajando: t("Trabajando ahora"),
+  curso: t("En curso"),
+  nuevo: t("Sin empezar"),
+  cerrado: t("Cerrado"),
 };
 
 export const PEDIDO_HINTS: Record<PedidoState, string> = {
-  toca: "Esperan una respuesta tuya",
-  cerrar: "Todas sus subtareas están hechas y el pedido sigue abierto",
-  bloqueado: "Marcados como bloqueados, sin una tarea que los frene",
-  espera: "Frenados por una tarea de otro pedido",
-  pausa: "Lo que falta está en backlog: nadie lo tiene tomado",
-  sueltos: "El pedido se cerró y le quedan subtareas abiertas",
-  trabajando: "Un agente está corriendo ahora",
-  curso: "Con trabajo empezado o en cola, sin nadie corriendo en este momento",
-  nuevo: "Nada empezado todavía",
-  cerrado: "Hechos o cancelados",
+  toca: t("Esperan una respuesta tuya"),
+  cerrar: t("Todas sus subtareas están hechas y el pedido sigue abierto"),
+  bloqueado: t("Marcados como bloqueados, sin una tarea que los frene"),
+  espera: t("Frenados por una tarea de otro pedido"),
+  pausa: t("Lo que falta está en backlog: nadie lo tiene tomado"),
+  sueltos: t("El pedido se cerró y le quedan subtareas abiertas"),
+  trabajando: t("Un agente está corriendo ahora"),
+  curso: t("Con trabajo empezado o en cola, sin nadie corriendo en este momento"),
+  nuevo: t("Nada empezado todavía"),
+  cerrado: t("Hechos o cancelados"),
 };
 
 /** Secciones que parten plegadas: suelen ser muchas y no piden nada. */

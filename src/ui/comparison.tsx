@@ -14,25 +14,27 @@ import {
   type DashboardQuery,
   type SortKey,
 } from "../dashboard.js";
+import { t } from "../i18n.js";
 import { CompanyTag, Skeleton, companyClass, companyStyle, cx, plural } from "./common.js";
+import { tx } from "./i18n.js";
 import { Icon } from "./icons.js";
 import { Layer } from "./layer.js";
 
 type Metric = "runs" | "creadas" | "exito";
 
 const COLUMNS: ReadonlyArray<{ key: SortKey; label: string; name: string; right: boolean }> = [
-  { key: "agentes", label: "Activos", name: "agentes activos", right: true },
-  { key: "encurso", label: "En curso", name: "tareas en curso", right: true },
-  { key: "abiertas", label: "Abiertas", name: "tareas abiertas", right: true },
-  { key: "bloq", label: "Bloq.", name: "tareas bloqueadas", right: true },
-  { key: "gasto", label: "Gasto", name: "gasto", right: false },
-  { key: "aprob", label: "Aprob.", name: "aprobaciones pendientes", right: true },
-  { key: "runs", label: "Runs", name: "runs", right: false },
-  { key: "creadas", label: "Tareas creadas", name: "tareas creadas", right: false },
-  { key: "exito", label: "Éxito", name: "tasa de éxito", right: false },
+  { key: "agentes", label: t("Activos"), name: t("agentes activos"), right: true },
+  { key: "encurso", label: t("En curso"), name: t("tareas en curso"), right: true },
+  { key: "abiertas", label: t("Abiertas"), name: t("tareas abiertas"), right: true },
+  { key: "bloq", label: t("Bloq."), name: t("tareas bloqueadas"), right: true },
+  { key: "gasto", label: t("Gasto"), name: t("gasto"), right: false },
+  { key: "aprob", label: t("Aprob."), name: t("aprobaciones pendientes"), right: true },
+  { key: "runs", label: t("Runs"), name: t("runs"), right: false },
+  { key: "creadas", label: t("Tareas creadas"), name: t("tareas creadas"), right: false },
+  { key: "exito", label: t("Éxito"), name: t("tasa de éxito"), right: false },
 ];
 
-const METRIC_NAMES: Record<Metric, string> = { runs: "Runs", creadas: "Tareas creadas", exito: "Éxito" };
+const METRIC_NAMES: Record<Metric, string> = { runs: t("Runs"), creadas: t("Tareas creadas"), exito: t("Éxito") };
 
 /** Gasto ≥ 90 % del presupuesto y éxito < 80 %: lo único que se marca en rojo (§1). */
 const SPEND_HOT_PERCENT = 90;
@@ -45,8 +47,14 @@ function barHeight(value: number, max: number): string {
 }
 
 function sparkLabel(metric: Metric, who: string, days: readonly string[], values: readonly string[], total: string): string {
-  const range = days.length > 0 ? `${dayLabel(days[0]!)} a ${dayLabel(days[days.length - 1]!)}` : "";
-  return `${METRIC_NAMES[metric]} de ${who}, ${range}: ${values.join(", ")}; total ${total}`;
+  const range = days.length > 0 ? t("{from} a {to}", { from: dayLabel(days[0]!), to: dayLabel(days[days.length - 1]!) }) : "";
+  return t("{metric} de {who}, {range}: {values}; total {total}", {
+    metric: METRIC_NAMES[metric],
+    who,
+    range,
+    values: values.join(", "),
+    total,
+  });
 }
 
 /** Minigráfico de una serie (una empresa, o el éxito de todas en gris). `null` = día sin datos. */
@@ -115,7 +123,7 @@ function StackSpark({
 }
 
 function NoData({ metric }: { metric: Metric }) {
-  return <span className="gb-nodata">{metric === "creadas" ? "sin tareas nuevas" : "sin runs"}</span>;
+  return <span className="gb-nodata">{metric === "creadas" ? t("sin tareas nuevas") : t("sin runs")}</span>;
 }
 
 function SkeletonCells() {
@@ -201,7 +209,7 @@ function openLabel(count: { total: number; byStatus: Partial<Record<string, numb
 }
 
 function successLabel(ok: number, total: number): string {
-  return `${ok} de ${total} ${total === 1 ? "exitoso" : "exitosos"}`;
+  return total === 1 ? t("{ok} de {total} exitoso", { ok, total }) : t("{ok} de {total} exitosos", { ok, total });
 }
 
 // ---------------------------------------------------------------------------
@@ -299,7 +307,11 @@ export function ComparisonTable({
                 key={row.company.id}
                 company={row.company}
                 value={runs.total}
-                label={`${row.company.prefix}${runs.failed > 0 ? ` · ${plural(runs.failed, "fallido", "fallidos")}` : ""}`}
+                label={
+                  runs.failed > 0
+                    ? t("{prefix} · {failed}", { prefix: row.company.prefix, failed: plural(runs.failed, "fallido", "fallidos") })
+                    : row.company.prefix
+                }
               />
             );
           })}
@@ -320,7 +332,11 @@ export function ComparisonTable({
                 key={row.company.id}
                 company={row.company}
                 value={created.total}
-                label={`${row.company.prefix}${created.total > 0 ? ` · ${openLabel(created)}` : ""}`}
+                label={
+                  created.total > 0
+                    ? t("{prefix} · {open}", { prefix: row.company.prefix, open: openLabel(created) })
+                    : row.company.prefix
+                }
               />
             );
           })}
@@ -337,7 +353,7 @@ export function ComparisonTable({
           </div>
           {rate.rate === null ? (
             <div className="gb-tr">
-              <span className="gb-l">Sin runs</span>
+              <span className="gb-l">{t("Sin runs")}</span>
             </div>
           ) : (
             <TipRow company={row.company} value={formatRate(rate.rate)} label={successLabel(rate.ok, rate.total)} />
@@ -352,10 +368,10 @@ export function ComparisonTable({
           {when} ·{" "}
           {all && all.rate !== null ? (
             <>
-              <b>{formatRate(all.rate)}</b> de éxito
+              {tx("{rate} de éxito", { rate: <b>{formatRate(all.rate)}</b> })}
             </>
           ) : (
-            "Sin runs"
+            t("Sin runs")
           )}
         </div>
         {companies.map(({ row, series }) => {
@@ -365,7 +381,10 @@ export function ComparisonTable({
               key={row.company.id}
               company={row.company}
               value={rate.rate === null ? "—" : formatRate(rate.rate)}
-              label={`${row.company.prefix} · ${rate.rate === null ? "sin runs" : successLabel(rate.ok, rate.total)}`}
+              label={t("{prefix} · {detail}", {
+                prefix: row.company.prefix,
+                detail: rate.rate === null ? t("sin runs") : successLabel(rate.ok, rate.total),
+              })}
             />
           );
         })}
@@ -379,25 +398,27 @@ export function ComparisonTable({
   const last = runDays[runDays.length - 1];
 
   return (
-    <div className="gb-ctab" role="table" aria-label="Comparativa por empresa" onMouseOver={onMouseOver} onMouseLeave={() => setTip(null)}>
+    <div className="gb-ctab" role="table" aria-label={t("Comparativa por empresa")} onMouseOver={onMouseOver} onMouseLeave={() => setTip(null)}>
       <div className="gb-ctr gb-cg" aria-hidden="true">
         <span />
         <span className="gb-g" style={{ gridColumn: "2 / 3" }}>
-          Agentes
+          {t("Agentes")}
         </span>
         <span className="gb-g" style={{ gridColumn: "3 / 6" }}>
-          Tareas
+          {t("Tareas")}
         </span>
         <span className="gb-g" style={{ gridColumn: "6 / 8" }}>
-          Mes
+          {t("Mes")}
         </span>
         <span className="gb-g" style={{ gridColumn: "8 / 11" }}>
-          Últimos 14 días{first && last ? ` · ${dayLabel(first)} → ${dayLabel(last)}` : ""}
+          {first && last
+            ? t("Últimos 14 días · {from} → {to}", { from: dayLabel(first), to: dayLabel(last) })
+            : t("Últimos 14 días")}
         </span>
         <span />
       </div>
       <div className="gb-ctr gb-cth" role="row">
-        <span role="columnheader">Empresa</span>
+        <span role="columnheader">{t("Empresa")}</span>
         {COLUMNS.map((column) => {
           const on = query.ord === column.key;
           const asc = on && query.dir === "asc";
@@ -411,8 +432,8 @@ export function ComparisonTable({
               <button
                 type="button"
                 className={cx("gb-csort", on && "is-on")}
-                aria-label={`Ordenar por ${column.name}`}
-                title={`Ordenar por ${column.name}`}
+                aria-label={t("Ordenar por {name}", { name: column.name })}
+                title={t("Ordenar por {name}", { name: column.name })}
                 onClick={() => onSort(column.key)}
               >
                 {column.label}
@@ -428,7 +449,7 @@ export function ComparisonTable({
           );
         })}
         <span role="columnheader">
-          <span className="gb-sr">Abrir</span>
+          <span className="gb-sr">{t("Abrir")}</span>
         </span>
       </div>
 
@@ -459,8 +480,8 @@ export function ComparisonTable({
       {listing || waiting > 0 ? (
         <div className="gb-ctr gb-ctot" role="row">
           <span className="gb-cname" role="cell">
-            <b>Total</b>
-            <small>{listing ? "cargando…" : `esperando a ${plural(waiting, "empresa", "empresas")}`}</small>
+            <b>{t("Total")}</b>
+            <small>{listing ? t("cargando…") : t("esperando a {companies}", { companies: plural(waiting, "empresa", "empresas") })}</small>
           </span>
           <SkeletonCells />
         </div>
@@ -514,7 +535,7 @@ function CompanyRowView({
     return (
       <div className="gb-ctr gb-crow" role="row">
         {name(
-          <span className="gb-spin" title={`${company.name}: cargando…`}>
+          <span className="gb-spin" title={t("{name}: cargando…", { name: company.name })}>
             <Icon name="loader" size={12} />
           </span>,
         )}
@@ -529,9 +550,9 @@ function CompanyRowView({
         {name()}
         <span className="gb-cerr" role="cell">
           <Icon name="circle-alert" size={14} />
-          No respondió. Sus números no están en los totales.
+          {t("No respondió. Sus números no están en los totales.")}
           <button type="button" className="gb-linkbtn" onClick={onRetry}>
-            Reintentar
+            {t("Reintentar")}
           </button>
         </span>
         <span role="cell" />
@@ -548,16 +569,16 @@ function CompanyRowView({
     <a
       className={cx("gb-ctr gb-crow", incident && "is-inc")}
       href={row.dashboardHref}
-      title={`Abrir el Dashboard de ${company.name}`}
+      title={t("Abrir el Dashboard de {name}", { name: company.name })}
       role="row"
     >
-      {name(live > 0 ? <span className="gb-live" title={`${live} en vivo`} /> : null)}
+      {name(live > 0 ? <span className="gb-live" title={t("{n} en vivo", { n: live })} /> : null)}
       <span className="gb-r gb-cag" role="cell">
         <b>{metrics.agentsEnabled}</b>
         {metrics.agentsError > 0 ? (
-          <small className="gb-bad">{metrics.agentsError} con error</small>
+          <small className="gb-bad">{t("{n} con error", { n: metrics.agentsError })}</small>
         ) : (
-          <small>{metrics.agentsRunning} corriendo</small>
+          <small>{t("{n} corriendo", { n: metrics.agentsRunning })}</small>
         )}
       </span>
       <span className="gb-r" role="cell">
@@ -572,7 +593,7 @@ function CompanyRowView({
       <span className="gb-cspend" role="cell">
         <span className="gb-top">
           <b>{formatMoney(metrics.monthSpendCents)}</b>
-          <small className={cx(hot && "gb-bad")}>{percent === null ? "sin límite" : `${Math.round(percent)}%`}</small>
+          <small className={cx(hot && "gb-bad")}>{percent === null ? t("sin límite") : `${Math.round(percent)}%`}</small>
         </span>
         {percent === null ? (
           <span className="gb-meter is-none" />
@@ -584,7 +605,7 @@ function CompanyRowView({
         {incident ? (
           <small className="gb-bad gb-cinc">
             <Icon name="triangle-alert" size={12} />
-            incidente de presupuesto
+            {t("incidente de presupuesto")}
           </small>
         ) : null}
       </span>
@@ -641,7 +662,7 @@ function CompanyRowView({
                 "exito",
                 company.name,
                 runDays,
-                series.success.map((day) => (day.rate === null ? "sin runs" : formatRate(day.rate))),
+                series.success.map((day) => (day.rate === null ? t("sin runs") : formatRate(day.rate))),
                 formatRate(rate),
               )}
             />
@@ -688,7 +709,7 @@ function TotalRow({
   return (
     <div className="gb-ctr gb-ctot" role="row">
       <span className="gb-cname" role="cell">
-        <b>Total</b>
+        <b>{t("Total")}</b>
         <small>{who}</small>
       </span>
       <span className="gb-r" role="cell">
@@ -706,7 +727,7 @@ function TotalRow({
       <span className="gb-cspend" role="cell">
         <span className="gb-top">
           <b>{formatMoney(totals.monthSpendCents)}</b>
-          <small>{totals.monthUtilizationPercent === null ? "sin límite" : `${Math.round(totals.monthUtilizationPercent)}%`}</small>
+          <small>{totals.monthUtilizationPercent === null ? t("sin límite") : `${Math.round(totals.monthUtilizationPercent)}%`}</small>
         </span>
       </span>
       <span className="gb-r" role="cell">
@@ -719,7 +740,7 @@ function TotalRow({
               days={runsByDay}
               max={maxRuns}
               tipKey="total:runs"
-              label={sparkLabel("runs", `las ${who}`, runDays, daySums(runsByDay), String(runsAll))}
+              label={sparkLabel("runs", t("las {companies}", { companies: who }), runDays, daySums(runsByDay), String(runsAll))}
             />
             <span className="gb-n">
               <b>{runsAll}</b>
@@ -736,7 +757,7 @@ function TotalRow({
               days={createdByDay}
               max={maxCreated}
               tipKey="total:creadas"
-              label={sparkLabel("creadas", `las ${who}`, taskDays, daySums(createdByDay), String(createdAll))}
+              label={sparkLabel("creadas", t("las {companies}", { companies: who }), taskDays, daySums(createdByDay), String(createdAll))}
             />
             <span className="gb-n">
               <b>{createdAll}</b>
@@ -756,9 +777,9 @@ function TotalRow({
               tipKey="total:exito"
               label={sparkLabel(
                 "exito",
-                `las ${who}`,
+                t("las {companies}", { companies: who }),
                 runDays,
-                model.charts.successRate.map((day) => (day.rate === null ? "sin runs" : formatRate(day.rate))),
+                model.charts.successRate.map((day) => (day.rate === null ? t("sin runs") : formatRate(day.rate))),
                 formatRate(rateAll),
               )}
             />

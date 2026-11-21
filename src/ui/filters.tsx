@@ -31,33 +31,34 @@ import { ISSUE_PRIORITIES, ISSUE_STATUSES, type IssuePriority, type IssueStatus 
 import { Avatar, CompanyTag, PRIORITY_LABELS, PriorityIcon, STATUS_LABELS, StatusIcon, companyClass, companyStyle, cx } from "./common.js";
 import { Icon, type IconName } from "./icons.js";
 import { Popover } from "./layer.js";
+import { t } from "../i18n.js";
 
 export const DIM_META: Record<FilterDim, { label: string; icon: IconName }> = {
-  emp: { label: "Empresa", icon: "building" },
-  prj: { label: "Proyecto", icon: "folder" },
-  est: { label: "Estado", icon: "circle-dashed" },
-  resp: { label: "Responsable", icon: "user" },
-  pri: { label: "Prioridad", icon: "signal" },
-  eti: { label: "Etiqueta", icon: "tag" },
+  emp: { label: t("Empresa"), icon: "building" },
+  prj: { label: t("Proyecto"), icon: "folder" },
+  est: { label: t("Estado"), icon: "circle-dashed" },
+  resp: { label: t("Responsable"), icon: "user" },
+  pri: { label: t("Prioridad"), icon: "signal" },
+  eti: { label: t("Etiqueta"), icon: "tag" },
 };
 
 export const GROUP_META: Record<GroupBy, { label: string; icon: IconName }> = {
-  empresa: { label: "Empresa", icon: "building" },
-  estado: { label: "Estado", icon: "circle-dashed" },
-  proyecto: { label: "Proyecto", icon: "folder" },
-  responsable: { label: "Responsable", icon: "user" },
-  prioridad: { label: "Prioridad", icon: "signal" },
+  empresa: { label: t("Empresa"), icon: "building" },
+  estado: { label: t("Estado"), icon: "circle-dashed" },
+  proyecto: { label: t("Proyecto"), icon: "folder" },
+  responsable: { label: t("Responsable"), icon: "user" },
+  prioridad: { label: t("Prioridad"), icon: "signal" },
 };
 
 /** Carriles del Board: etiqueta, icono, plural y qué no cambia al arrastrar. */
 export const LANE_META: Record<LaneBy, { label: string; icon: IconName; plural: string; what: string }> = {
-  empresa: { label: "Empresa", icon: "building", plural: "empresas", what: "la empresa" },
-  proyecto: { label: "Proyecto", icon: "folder", plural: "proyectos", what: "el proyecto" },
-  responsable: { label: "Responsable", icon: "user", plural: "responsables", what: "el responsable" },
+  empresa: { label: t("Empresa"), icon: "building", plural: t("empresas"), what: t("la empresa") },
+  proyecto: { label: t("Proyecto"), icon: "folder", plural: t("proyectos"), what: t("el proyecto") },
+  responsable: { label: t("Responsable"), icon: "user", plural: t("responsables"), what: t("el responsable") },
 };
 
 /** Filtro de fecha (§5 de JST-21). */
-const DATE_META = { label: "Actualizada", icon: "clock" as IconName };
+const DATE_META = { label: t("Actualizada"), icon: "clock" as IconName };
 
 interface DimOption {
   value: string;
@@ -78,7 +79,7 @@ function dimOptions(index: BoardIndex, dim: FilterDim): DimOption[] {
       return ISSUE_PRIORITIES.map((priority) => ({ value: priority, label: PRIORITY_LABELS[priority], pre: <PriorityIcon priority={priority} /> }));
     case "prj": {
       const used = new Set(index.issues.map((issue) => issue.projectId ?? NO_PROJECT));
-      const options: DimOption[] = used.has(NO_PROJECT) ? [{ value: NO_PROJECT, label: "Sin proyecto" }] : [];
+      const options: DimOption[] = used.has(NO_PROJECT) ? [{ value: NO_PROJECT, label: t("Sin proyecto") }] : [];
       for (const company of index.companies) {
         const projects = [...index.projectById.values()]
           .filter((project) => project.companyId === company.id && used.has(project.id))
@@ -91,7 +92,7 @@ function dimOptions(index: BoardIndex, dim: FilterDim): DimOption[] {
     }
     case "resp": {
       const used = new Set(index.issues.map(assigneeKey));
-      const options: DimOption[] = [{ value: UNASSIGNED, label: "Sin asignar", pre: <Avatar name={null} size={18} /> }];
+      const options: DimOption[] = [{ value: UNASSIGNED, label: t("Sin asignar"), pre: <Avatar name={null} size={18} /> }];
       for (const company of index.companies) {
         const agents = [...index.agentById.values()]
           .filter((agent) => agent.companyId === company.id && used.has(`agent:${agent.id}`))
@@ -102,7 +103,7 @@ function dimOptions(index: BoardIndex, dim: FilterDim): DimOption[] {
       }
       for (const key of [...used].filter((k) => k.startsWith("user:")).sort()) {
         const label = assigneeLabel(index, key);
-        options.push({ value: key, label, group: "Personas", pre: <Avatar name={label} size={18} /> });
+        options.push({ value: key, label, group: t("Personas"), pre: <Avatar name={label} size={18} /> });
       }
       return options;
     }
@@ -120,9 +121,9 @@ function dimOptions(index: BoardIndex, dim: FilterDim): DimOption[] {
 export function valueLabel(index: BoardIndex, dim: FilterDim, value: string): string {
   switch (dim) {
     case "prj": {
-      if (value === NO_PROJECT) return "Sin proyecto";
+      if (value === NO_PROJECT) return t("Sin proyecto");
       const project = index.projectById.get(value);
-      if (!project) return "Proyecto desconocido";
+      if (!project) return t("Proyecto desconocido");
       return `${index.companyById.get(project.companyId)?.prefix ?? ""} · ${project.name}`;
     }
     case "resp":
@@ -152,7 +153,7 @@ function chipValue(index: BoardIndex, dim: FilterDim, values: readonly string[])
     ));
   }
   if (values.length <= 2) return values.map((value) => valueLabel(index, dim, value)).join(", ");
-  return `${values.length} seleccionados`;
+  return t("{n} seleccionados", { n: values.length });
 }
 
 // ---------------------------------------------------------------------------
@@ -193,7 +194,7 @@ function DimMenuBody({
           <input
             autoFocus
             value={search}
-            placeholder={`Buscar ${DIM_META[dim].label.toLowerCase()}…`}
+            placeholder={t("Buscar {what}…", { what: DIM_META[dim].label.toLowerCase() })}
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
@@ -221,14 +222,14 @@ function DimMenuBody({
             </div>
           );
         })}
-        {visible.length === 0 ? <div className="gb-mh">Sin coincidencias</div> : null}
+        {visible.length === 0 ? <div className="gb-mh">{t("Sin coincidencias")}</div> : null}
       </div>
       {selected.length > 0 ? (
         <>
           <div className="gb-msep" />
           <button type="button" className="gb-mi" onClick={() => onFilters(clearFilter(filters, dim))}>
             <Icon name="x" size={14} />
-            <span className="gb-lbl gb-muted">Quitar filtro</span>
+            <span className="gb-lbl gb-muted">{t("Quitar filtro")}</span>
           </button>
         </>
       ) : null}
@@ -252,8 +253,8 @@ function DateMenuBody({
 }) {
   const counts = useMemo(() => dateCounts(index, filters), [index, filters]);
   const options = [
-    { value: null, label: "Cualquier fecha", count: counts.any },
-    { value: "7d" as const, label: "En los últimos 7 días", count: counts["7d"] },
+    { value: null, label: t("Cualquier fecha"), count: counts.any },
+    { value: "7d" as const, label: t("En los últimos 7 días"), count: counts["7d"] },
   ];
   return (
     <>
@@ -286,7 +287,7 @@ function DateMenuBody({
       <div className="gb-msep" />
       <div className="gb-mnote">
         <Icon name="info" size={12} />
-        <span>Usa la fecha «Actualizada» de cada tarea, la misma de la Lista. Cuenta 7 días hacia atrás desde ahora.</span>
+        <span>{t("Usa la fecha «Actualizada» de cada tarea, la misma de la Lista. Cuenta 7 días hacia atrás desde ahora.")}</span>
       </div>
     </>
   );
@@ -324,7 +325,7 @@ function MoreMenuBody({
   ];
   return (
     <>
-      <div className="gb-mh">Filtrar por</div>
+      <div className="gb-mh">{t("Filtrar por")}</div>
       {entries.map((entry) => (
         <button key={entry.key} type="button" className="gb-mi" onClick={() => setDim(entry.key)}>
           <Icon name={entry.icon} size={14} />
@@ -391,11 +392,11 @@ function HideField({ query, onQuery }: { query: BoardQuery; onQuery: (query: Boa
       apply({ ...now, hide });
     }, 400);
   };
-  const label = "Ocultar los pedidos cuyo título empieza con este texto. Separa varios con coma.";
+  const label = t("Ocultar los pedidos cuyo título empieza con este texto. Separa varios con coma.");
   return (
     <label className={cx("gb-search", "gb-hide", query.hide.length > 0 && "is-active")} title={label}>
       <Icon name="eye-off" size={14} />
-      <input value={draft} placeholder="Ocultar títulos que empiezan con…" aria-label={label} onChange={(e) => onChange(e.target.value)} />
+      <input value={draft} placeholder={t("Ocultar títulos que empiezan con…")} aria-label={label} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }
@@ -465,12 +466,12 @@ export function FilterBar({
   return (
     <>
       <div className={cx("gb-filters", disabled && "is-off")}>
-        <label className="gb-search" title="Buscar por ID, título o empresa">
+        <label className="gb-search" title={t("Buscar por ID, título o empresa")}>
           <Icon name="search" size={14} />
-          <input value={draft} placeholder="Buscar…" aria-label="Buscar por ID, título o empresa" onChange={(e) => onSearch(e.target.value)} />
+          <input value={draft} placeholder={t("Buscar…")} aria-label={t("Buscar por ID, título o empresa")} onChange={(e) => onSearch(e.target.value)} />
         </label>
         {index && index.companies.length > 1 ? (
-          <div className="gb-cotogs" role="group" aria-label="Empresas">
+          <div className="gb-cotogs" role="group" aria-label={t("Empresas")}>
             {index.companies.map((company) => {
               const on = filters.emp.includes(company.prefix);
               return (
@@ -480,7 +481,7 @@ export function FilterBar({
                   className={cx("gb-cotog", companyClass(company), on ? "is-on" : filters.emp.length > 0 && "is-dim")}
                   style={companyStyle(company)}
                   aria-pressed={on}
-                  title={`${on ? "Quitar filtro" : "Ver solo"}: ${company.name}`}
+                  title={on ? t("Quitar filtro: {name}", { name: company.name }) : t("Ver solo: {name}", { name: company.name })}
                   onClick={() => setFilters(toggleValue(filters, "emp", company.prefix))}
                 >
                   {company.prefix}
@@ -494,22 +495,22 @@ export function FilterBar({
           className={cx("gb-btn", "gb-quick", filters.toca && !tocaOff && "is-on")}
           aria-pressed={filters.toca && !tocaOff}
           disabled={tocaOff}
-          title={tocaOff ? "No disponible en esta instancia" : "Solo las tareas donde te toca responder"}
+          title={tocaOff ? t("No disponible en esta instancia") : t("Solo las tareas donde te toca responder")}
           onClick={() => setFilters({ ...filters, toca: !filters.toca })}
         >
           <Icon name="reply" size={14} />
-          Te toca
+          {t("Te toca")}
           {quick && !tocaOff ? <b className="gb-tnum">{quick.toca}</b> : null}
         </button>
         <button
           type="button"
           className={cx("gb-btn", "gb-quick", critOn && "is-on")}
           aria-pressed={critOn}
-          title="Solo las de prioridad crítica o alta"
+          title={t("Solo las de prioridad crítica o alta")}
           onClick={() => setFilters({ ...filters, pri: critOn ? [] : [...HOT_PRIORITIES] })}
         >
           <PriorityIcon priority="high" />
-          Críticas y altas
+          {t("Críticas y altas")}
           {quick ? <b className="gb-tnum">{quick.crit}</b> : null}
         </button>
         <button
@@ -520,7 +521,7 @@ export function FilterBar({
           onClick={(event) => toggleMenu({ kind: "more", anchor: event.currentTarget, sub: null })}
         >
           <Icon name="funnel" size={14} />
-          Filtros
+          {t("Filtros")}
           {menuCount > 0 ? <span className="gb-v">· {menuCount}</span> : null}
           <Icon name="chevron-down" size={14} />
         </button>
@@ -533,7 +534,7 @@ export function FilterBar({
             onClick={(event) => toggleMenu({ kind: "group", anchor: event.currentTarget })}
           >
             <Icon name="layers" size={14} />
-            Agrupar: {GROUP_META[query.group].label}
+            {t("Agrupar: {group}", { group: GROUP_META[query.group].label })}
             <Icon name="chevron-down" size={14} />
           </button>
         ) : view === "pedidos" ? (
@@ -542,19 +543,19 @@ export function FilterBar({
             <button
               type="button"
               className="gb-btn is-ghost"
-              title="Los pedidos hechos y cancelados"
+              title={t("Los pedidos hechos y cancelados")}
               onClick={() => onQuery({ ...query, showClosed: !query.showClosed })}
             >
               <Icon name={query.showClosed ? "eye-off" : "eye"} size={14} />
-              {query.showClosed ? "Ocultar cerrados" : "Ver cerrados"}
+              {query.showClosed ? t("Ocultar cerrados") : t("Ver cerrados")}
             </button>
           </>
         ) : view === "kanban" ? (
           <>
             {query.showClosed ? (
-              <button type="button" className="gb-btn is-ghost" title="Ocultar las columnas Hecha y Cancelada" onClick={() => onQuery({ ...query, showClosed: false })}>
+              <button type="button" className="gb-btn is-ghost" title={t("Ocultar las columnas Hecha y Cancelada")} onClick={() => onQuery({ ...query, showClosed: false })}>
                 <Icon name="eye-off" size={14} />
-                Ocultar cerradas
+                {t("Ocultar cerradas")}
               </button>
             ) : null}
             <button
@@ -565,7 +566,7 @@ export function FilterBar({
               onClick={(event) => toggleMenu({ kind: "lanes", anchor: event.currentTarget })}
             >
               <Icon name="rows" size={14} />
-              Agrupar: {lanes ? LANE_META[lanes].label : "Sin agrupar"}
+              {t("Agrupar: {group}", { group: lanes ? LANE_META[lanes].label : t("Sin agrupar") })}
               <Icon name="chevron-down" size={14} />
             </button>
           </>
@@ -574,7 +575,7 @@ export function FilterBar({
 
       {index && (chipDims.length > 0 || filters.act || filters.q) ? (
         <div className="gb-chips">
-          Filtros:
+          {t("Filtros:")}
           {chipDims.map((dim) => (
             <span key={dim} className="gb-fchip">
               <span className="gb-k">{DIM_META[dim].label}</span>
@@ -586,7 +587,7 @@ export function FilterBar({
               >
                 {chipValue(index, dim, filters[dim])}
               </button>
-              <button type="button" className="gb-x" aria-label={`Quitar filtro ${DIM_META[dim].label}`} onClick={() => setFilters(clearFilter(filters, dim))}>
+              <button type="button" className="gb-x" aria-label={t("Quitar filtro {name}", { name: DIM_META[dim].label })} onClick={() => setFilters(clearFilter(filters, dim))}>
                 <Icon name="x" size={12} />
               </button>
             </span>
@@ -601,24 +602,24 @@ export function FilterBar({
                 onClick={(event) => toggleMenu({ kind: "act", anchor: event.currentTarget })}
               >
                 <Icon name="clock" size={12} />
-                últimos 7 días
+                {t("últimos 7 días")}
               </button>
-              <button type="button" className="gb-x" aria-label={`Quitar filtro ${DATE_META.label}`} onClick={() => setFilters(clearFilter(filters, "act"))}>
+              <button type="button" className="gb-x" aria-label={t("Quitar filtro {name}", { name: DATE_META.label })} onClick={() => setFilters(clearFilter(filters, "act"))}>
                 <Icon name="x" size={12} />
               </button>
             </span>
           ) : null}
           {filters.q ? (
             <span className="gb-fchip">
-              <span className="gb-k">Texto</span>
+              <span className="gb-k">{t("Texto")}</span>
               <span className="gb-v">“{filters.q}”</span>
-              <button type="button" className="gb-x" aria-label="Quitar búsqueda" onClick={() => setFilters(clearFilter(filters, "q"))}>
+              <button type="button" className="gb-x" aria-label={t("Quitar búsqueda")} onClick={() => setFilters(clearFilter(filters, "q"))}>
                 <Icon name="x" size={12} />
               </button>
             </span>
           ) : null}
           <button type="button" className="gb-linkbtn" onClick={() => setFilters(emptyFilters())}>
-            Limpiar todo
+            {t("Limpiar todo")}
           </button>
         </div>
       ) : null}
@@ -645,7 +646,7 @@ export function FilterBar({
             />
           ) : menu.kind === "lanes" ? (
             <>
-              <div className="gb-mh">Agrupar el Board por</div>
+              <div className="gb-mh">{t("Agrupar el Board por")}</div>
               {[...LANE_OPTIONS, null].map((option) => (
                 <button
                   key={option ?? "none"}
@@ -659,7 +660,7 @@ export function FilterBar({
                   }}
                 >
                   <Icon name={option ? LANE_META[option].icon : "kanban"} size={14} />
-                  <span className="gb-lbl">{option ? LANE_META[option].label : "Sin agrupar"}</span>
+                  <span className="gb-lbl">{option ? LANE_META[option].label : t("Sin agrupar")}</span>
                   {lanes === option ? <Icon name="check" size={14} /> : null}
                 </button>
               ))}
@@ -677,7 +678,7 @@ export function FilterBar({
                       }}
                     >
                       <Icon name={fold ? "chevrons-down-up" : "chevrons-up-down"} size={14} />
-                      <span className="gb-lbl">{fold ? "Plegar todos los carriles" : "Desplegar todos"}</span>
+                      <span className="gb-lbl">{fold ? t("Plegar todos los carriles") : t("Desplegar todos")}</span>
                     </button>
                   ))}
                 </>
@@ -685,12 +686,12 @@ export function FilterBar({
               <div className="gb-msep" />
               <div className="gb-mnote">
                 <Icon name="info" size={12} />
-                <span>Las columnas siguen siendo los estados. Al arrastrar solo cambia el estado, dentro del mismo carril.</span>
+                <span>{t("Las columnas siguen siendo los estados. Al arrastrar solo cambia el estado, dentro del mismo carril.")}</span>
               </div>
             </>
           ) : (
             <>
-              <div className="gb-mh">Agrupar por</div>
+              <div className="gb-mh">{t("Agrupar por")}</div>
               {GROUP_BY_OPTIONS.map((group) => (
                 <button
                   key={group}

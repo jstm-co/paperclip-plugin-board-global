@@ -12,6 +12,7 @@ import {
   type IssuePriority,
   type IssueStatus,
 } from "./shared.js";
+import { localeTag, t } from "./i18n.js";
 
 // ---------------------------------------------------------------------------
 // Estado en la URL (design-spec §5)
@@ -206,11 +207,11 @@ export function serializeBoardQuery(query: BoardQuery): string {
 export type WaitKind = "pregunta" | "confirmacion" | "aprobacion" | "desbloqueo" | "otro";
 
 export const WAIT_LABELS: Record<WaitKind, string> = {
-  pregunta: "Responder pregunta",
-  confirmacion: "Confirmar",
-  aprobacion: "Aprobar",
-  desbloqueo: "Desbloquear",
-  otro: "Atender",
+  pregunta: t("Responder pregunta"),
+  confirmacion: t("Confirmar"),
+  aprobacion: t("Aprobar"),
+  desbloqueo: t("Desbloquear"),
+  otro: t("Atender"),
 };
 
 export interface Waiting {
@@ -242,8 +243,10 @@ function waitWhat(item: AttentionItem, kind: WaitKind): string {
   if (kind === "desbloqueo") {
     const blocked = item.detail?.blockedTaskCount ?? 0;
     return blocked > 0
-      ? `Bloquea ${blocked} ${blocked === 1 ? "tarea" : "tareas"} y necesita tu atención`
-      : "Necesita tu atención para destrabarse";
+      ? blocked === 1
+        ? t("Bloquea {n} tarea y necesita tu atención", { n: blocked })
+        : t("Bloquea {n} tareas y necesita tu atención", { n: blocked })
+      : t("Necesita tu atención para destrabarse");
   }
   // Si el sujeto es la propia tarea, su título no dice qué se pide.
   const title = item.subject?.kind !== "issue" ? item.subject?.title?.trim() : "";
@@ -380,18 +383,18 @@ export function assigneeKey(issue: BoardIssue): string {
 
 /** En `local_trusted` el usuario del board es `local-board`; el SDK no expone nombres de personas. */
 export function userLabel(userId: string): string {
-  return userId === "local-board" ? "Board" : `Persona ${userId.slice(0, 8)}`;
+  return userId === "local-board" ? t("Board") : t("Persona {id}", { id: userId.slice(0, 8) });
 }
 
 export function assigneeLabel(index: BoardIndex, key: string): string {
-  if (key === UNASSIGNED) return "Sin asignar";
-  if (key.startsWith("agent:")) return index.agentById.get(key.slice("agent:".length))?.name ?? "Agente desconocido";
+  if (key === UNASSIGNED) return t("Sin asignar");
+  if (key.startsWith("agent:")) return index.agentById.get(key.slice("agent:".length))?.name ?? t("Agente desconocido");
   return userLabel(key.slice("user:".length));
 }
 
 export function projectLabel(index: BoardIndex, projectId: string | null): string {
-  if (!projectId || projectId === NO_PROJECT) return "Sin proyecto";
-  return index.projectById.get(projectId)?.name ?? "Proyecto desconocido";
+  if (!projectId || projectId === NO_PROJECT) return t("Sin proyecto");
+  return index.projectById.get(projectId)?.name ?? t("Proyecto desconocido");
 }
 
 /** Ruta de la tarea en su empresa. Va en un `href` normal: la navegación del host antepone la empresa activa. */
@@ -993,10 +996,10 @@ export function relativeTime(iso: string | null | undefined, now: number = Date.
   const at = iso ? Date.parse(iso) : NaN;
   if (Number.isNaN(at)) return "";
   const minutes = Math.max(1, Math.round((now - at) / 60_000));
-  if (minutes < 60) return `hace ${minutes} min`;
+  if (minutes < 60) return t("hace {n} min", { n: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `hace ${hours} h`;
+  if (hours < 24) return t("hace {n} h", { n: hours });
   const days = Math.round(hours / 24);
-  if (days < 30) return `hace ${days} d`;
-  return new Date(at).toLocaleDateString("es-CL", { day: "numeric", month: "short" });
+  if (days < 30) return t("hace {n} d", { n: days });
+  return new Date(at).toLocaleDateString(localeTag(), { day: "numeric", month: "short" });
 }

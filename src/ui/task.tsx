@@ -5,6 +5,7 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { MarkdownBlock } from "@paperclipai/plugin-sdk/ui";
 import { ancestorsOf, childrenOf, progressOf, projectLabel, relativeTime, sortSubtasks, type BoardIndex } from "../board.js";
+import { localeTag, t } from "../i18n.js";
 import { ISSUE_STATUSES, isOpenStatus, type BoardIssue, type IssueComment, type IssueDetail, type IssueStatus } from "../shared.js";
 import { TASK_COMMENTS_LIMIT, commentAuthor, commentBody, visibleComments } from "../task.js";
 import { addIssueComment, getIssueDetail, listIssueComments, markIssueRead } from "./bridge.js";
@@ -122,7 +123,7 @@ function Description({ text }: { text: string }) {
       </div>
       {long ? (
         <button type="button" className="gb-linkbtn gb-taskmore" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? "Mostrar menos" : "Mostrar toda la descripción"}
+          {open ? t("Mostrar menos") : t("Mostrar toda la descripción")}
         </button>
       ) : null}
     </>
@@ -209,7 +210,7 @@ export function TaskModal({
   const company = index.companyById.get(issue.companyId);
   const href = hrefFor(index, issue);
   const mine = userId !== null && !issue.assigneeAgentId && issue.assigneeUserId === userId;
-  const who = mine ? "Tú" : assigneeName(index, issue);
+  const who = mine ? t("Tú") : assigneeName(index, issue);
   const ancestors = ancestorsOf(index, issue);
   const kids = useMemo(() => sortSubtasks(index, childrenOf(index, issue)), [index, issue]);
   const progress = progressOf(index, issue);
@@ -229,7 +230,7 @@ export function TaskModal({
         <div ref={ref} className="gb-task" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onKeyDown={onKeyDown}>
           <div className="gb-taskhead">
             <CompanyTag company={company} solid />
-            <nav className="gb-crumbs" aria-label="Tarea y sus tareas padre">
+            <nav className="gb-crumbs" aria-label={t("Tarea y sus tareas padre")}>
               {ancestors.map((ancestor) => (
                 <span key={ancestor.id} className="gb-crumb">
                   <button type="button" className="gb-mono" title={ancestor.title} onClick={() => onOpen(ancestor)}>
@@ -241,11 +242,11 @@ export function TaskModal({
               <span className="gb-mono gb-crumb-cur">{issue.identifier}</span>
             </nav>
             <span className="gb-sp" />
-            <a className="gb-btn is-sm is-ghost" href={href} title="Abrir la página de la tarea, con todo su detalle">
+            <a className="gb-btn is-sm is-ghost" href={href} title={t("Abrir la página de la tarea, con todo su detalle")}>
               <Icon name="external-link" size={14} />
-              <span className="gb-taskfull">Página completa</span>
+              <span className="gb-taskfull">{t("Página completa")}</span>
             </a>
-            <button type="button" className="gb-btn is-sm is-ghost is-icon" title="Cerrar (Esc)" aria-label="Cerrar" onClick={onClose}>
+            <button type="button" className="gb-btn is-sm is-ghost is-icon" title={t("Cerrar (Esc)")} aria-label={t("Cerrar")} onClick={onClose}>
               <Icon name="x" size={16} />
             </button>
           </div>
@@ -258,33 +259,33 @@ export function TaskModal({
               <WaitNote index={index} issue={issue} now={now}>
                 {waiting ? (
                   <a className="gb-tasklink" href={href}>
-                    Ir a responder
+                    {t("Ir a responder")}
                     <Icon name="chevron-right" size={12} />
                   </a>
                 ) : null}
               </WaitNote>
 
-              <section className="gb-tasksec" aria-label="Descripción">
-                <h3>Descripción</h3>
+              <section className="gb-tasksec" aria-label={t("Descripción")}>
+                <h3>{t("Descripción")}</h3>
                 {thread.detail ? (
                   thread.detail.description?.trim() ? (
                     <Description key={issue.id} text={thread.detail.description} />
                   ) : (
-                    <p className="gb-muted">Sin descripción.</p>
+                    <p className="gb-muted">{t("Sin descripción.")}</p>
                   )
                 ) : thread.detailError ? (
-                  <LoadError what="la descripción" message={thread.detailError} onRetry={retry} />
+                  <LoadError what={t("la descripción")} message={thread.detailError} onRetry={retry} />
                 ) : (
                   <TextSkeleton lines={3} />
                 )}
               </section>
 
               {kids.length > 0 ? (
-                <section className="gb-tasksec" aria-label="Subtareas">
+                <section className="gb-tasksec" aria-label={t("Subtareas")}>
                   <h3>
-                    Subtareas
+                    {t("Subtareas")}
                     <span className="gb-taskn gb-tnum">
-                      {progress.done}/{progress.total} hechas
+                      {t("{done}/{total} hechas", { done: progress.done, total: progress.total })}
                     </span>
                     <ProgressBar done={progress.done} total={progress.total} width={64} />
                   </h3>
@@ -295,15 +296,15 @@ export function TaskModal({
                   </div>
                   {kids.length > shownKids.length ? (
                     <button type="button" className="gb-linkbtn" onClick={() => setAllKids(true)}>
-                      Ver las {kids.length} subtareas
+                      {t("Ver las {n} subtareas", { n: kids.length })}
                     </button>
                   ) : null}
                 </section>
               ) : null}
 
-              <section className="gb-tasksec" aria-label="Comentarios">
+              <section className="gb-tasksec" aria-label={t("Comentarios")}>
                 <h3>
-                  Comentarios
+                  {t("Comentarios")}
                   {thread.comments ? <span className="gb-taskn gb-tnum">{visibleComments(thread.comments).length}</span> : null}
                 </h3>
                 <Composer
@@ -316,16 +317,16 @@ export function TaskModal({
                 {thread.comments ? (
                   <Comments index={index} comments={thread.comments} now={now} userId={userId} href={href} />
                 ) : thread.commentsError ? (
-                  <LoadError what="los comentarios" message={thread.commentsError} onRetry={retry} />
+                  <LoadError what={t("los comentarios")} message={thread.commentsError} onRetry={retry} />
                 ) : (
                   <TextSkeleton lines={2} />
                 )}
               </section>
             </div>
 
-            <aside className="gb-taskside" aria-label="Detalles">
+            <aside className="gb-taskside" aria-label={t("Detalles")}>
               <div className="gb-taskfield">
-                <span>Estado</span>
+                <span>{t("Estado")}</span>
                 <button
                   type="button"
                   className={cx("gb-btn is-sm gb-taskstatus", statusMenu && "is-active")}
@@ -339,39 +340,39 @@ export function TaskModal({
                 </button>
               </div>
               {pending ? (
-                <button type="button" className="gb-confirm gb-taskconfirm" title="Ya la revisé: sale de «Por confirmar» y queda entre las cerradas" onClick={() => onConfirm(issue)}>
+                <button type="button" className="gb-confirm gb-taskconfirm" title={t("Ya la revisé: sale de «Por confirmar» y queda entre las cerradas")} onClick={() => onConfirm(issue)}>
                   <Icon name="check" size={14} />
-                  Confirmar
+                  {t("Confirmar")}
                 </button>
               ) : null}
               <div className="gb-taskfield">
-                <span>Responsable</span>
+                <span>{t("Responsable")}</span>
                 <b>
                   <Avatar name={who} size={18} />
-                  {who ?? "Sin asignar"}
+                  {who ?? t("Sin asignar")}
                 </b>
               </div>
               <div className="gb-taskfield">
-                <span>Prioridad</span>
+                <span>{t("Prioridad")}</span>
                 <b>
                   <PriorityIcon priority={issue.priority} />
                   {PRIORITY_LABELS[issue.priority]}
                 </b>
               </div>
               <div className="gb-taskfield">
-                <span>Proyecto</span>
+                <span>{t("Proyecto")}</span>
                 <b>
                   <Icon name="folder" size={14} />
                   {projectLabel(index, issue.projectId)}
                 </b>
               </div>
               <div className="gb-taskfield">
-                <span>Empresa</span>
+                <span>{t("Empresa")}</span>
                 <b>{company?.name ?? "—"}</b>
               </div>
               {issue.labels.length > 0 ? (
                 <div className="gb-taskfield is-wrap">
-                  <span>Etiquetas</span>
+                  <span>{t("Etiquetas")}</span>
                   <div className="gb-labels">
                     {issue.labels.map((label) => (
                       <span key={label.id} className="gb-lblpill">
@@ -384,7 +385,7 @@ export function TaskModal({
               ) : null}
               {blockers.length > 0 ? (
                 <div className="gb-taskfield is-wrap">
-                  <span>Bloqueada por</span>
+                  <span>{t("Bloqueada por")}</span>
                   <div className="gb-taskkids">
                     {blockers.map((blocker) => (
                       <KidRow key={blocker.id} index={index} issue={blocker} />
@@ -393,8 +394,8 @@ export function TaskModal({
                 </div>
               ) : null}
               <div className="gb-taskdates">
-                {thread.detail ? <span>Creada {relativeTime(thread.detail.createdAt, now)}</span> : null}
-                <span>Actualizada {relativeTime(issue.updatedAt, now)}</span>
+                {thread.detail ? <span>{t("Creada {when}", { when: relativeTime(thread.detail.createdAt, now) })}</span> : null}
+                <span>{t("Actualizada {when}", { when: relativeTime(issue.updatedAt, now) })}</span>
               </div>
             </aside>
           </div>
@@ -402,8 +403,8 @@ export function TaskModal({
       </div>
 
       {statusMenu ? (
-        <Popover anchor={statusMenu} width={200} align="end" label="Cambiar estado" onClose={() => setStatusMenu(null)}>
-          <div className="gb-mh">Cambiar estado</div>
+        <Popover anchor={statusMenu} width={200} align="end" label={t("Cambiar estado")} onClose={() => setStatusMenu(null)}>
+          <div className="gb-mh">{t("Cambiar estado")}</div>
           {ISSUE_STATUSES.map((status) => (
             <button
               key={status}
@@ -435,7 +436,7 @@ function KidRow({ index, issue }: { index: BoardIndex; issue: BoardIssue }) {
     <a
       className={cx("gb-taskkid", !isOpenStatus(issue.status) && "is-closed")}
       href={hrefFor(index, issue)}
-      title={`${STATUS_LABELS[issue.status]} · ${issue.title}`}
+      title={t("{status} · {title}", { status: STATUS_LABELS[issue.status], title: issue.title })}
       onClick={openTask.link(issue)}
     >
       <StatusIcon status={issue.status} size={12} />
@@ -480,8 +481,8 @@ function Composer({ issue, onSent }: { issue: BoardIssue; onSent: (comment: Issu
       <textarea
         value={draft}
         rows={draft.includes("\n") || draft.length > 90 ? 4 : 2}
-        placeholder="Escribe un comentario…"
-        aria-label={`Comentario para ${issue.identifier ?? "la tarea"}`}
+        placeholder={t("Escribe un comentario…")}
+        aria-label={t("Comentario para {task}", { task: issue.identifier ?? t("la tarea") })}
         disabled={sending}
         onChange={(event) => write(event.target.value)}
         onKeyDown={(event) => {
@@ -494,14 +495,14 @@ function Composer({ issue, onSent }: { issue: BoardIssue; onSent: (comment: Issu
       <div className="gb-taskcompfoot">
         {error ? (
           <span className="gb-taskerr" role="alert">
-            No se pudo comentar: {error}
+            {t("No se pudo comentar: {message}", { message: error })}
           </span>
         ) : (
-          <span className="gb-muted">Acepta Markdown · Ctrl o ⌘ + Enter para enviar</span>
+          <span className="gb-muted">{t("Acepta Markdown · Ctrl o ⌘ + Enter para enviar")}</span>
         )}
         <span className="gb-sp" />
         <button type="button" className="gb-btn is-sm is-primary" disabled={!body || sending} onClick={() => void send()}>
-          {sending ? "Enviando…" : "Comentar"}
+          {sending ? t("Enviando…") : t("Comentar")}
         </button>
       </div>
     </div>
@@ -510,7 +511,7 @@ function Composer({ issue, onSent }: { issue: BoardIssue; onSent: (comment: Issu
 
 function Comments({ index, comments, now, userId, href }: { index: BoardIndex; comments: IssueComment[]; now: number; userId: string | null; href: string }) {
   const shown = useMemo(() => visibleComments(comments), [comments]);
-  if (shown.length === 0) return <p className="gb-muted gb-tasknone">Todavía no hay comentarios.</p>;
+  if (shown.length === 0) return <p className="gb-muted gb-tasknone">{t("Todavía no hay comentarios.")}</p>;
   return (
     <div className="gb-taskcomments">
       {shown.map((comment) => {
@@ -522,7 +523,7 @@ function Comments({ index, comments, now, userId, href }: { index: BoardIndex; c
               <div className="gb-taskchead">
                 <b>{author.name}</b>
                 {author.agent ? <Icon name="bot" size={12} /> : null}
-                <span className="gb-muted" title={new Date(comment.createdAt).toLocaleString("es-CL")}>
+                <span className="gb-muted" title={new Date(comment.createdAt).toLocaleString(localeTag())}>
                   {relativeTime(comment.createdAt, now)}
                 </span>
               </div>
@@ -533,7 +534,7 @@ function Comments({ index, comments, now, userId, href }: { index: BoardIndex; c
       })}
       {comments.length >= TASK_COMMENTS_LIMIT ? (
         <a className="gb-tasklink" href={href}>
-          Los comentarios anteriores están en la página de la tarea
+          {t("Los comentarios anteriores están en la página de la tarea")}
           <Icon name="chevron-right" size={12} />
         </a>
       ) : null}
@@ -554,9 +555,9 @@ function TextSkeleton({ lines }: { lines: number }) {
 function LoadError({ what, message, onRetry }: { what: string; message: string; onRetry: () => void }) {
   return (
     <p className="gb-taskerr" role="alert">
-      No se pudo cargar {what}: {message}.{" "}
+      {t("No se pudo cargar {what}: {message}.", { what, message })}{" "}
       <button type="button" className="gb-linkbtn" onClick={onRetry}>
-        Reintentar
+        {t("Reintentar")}
       </button>
     </p>
   );

@@ -3,6 +3,7 @@
 // confirma. Para Paperclip siguen cerradas; el plugin solo recuerda cuáles ya
 // se confirmaron. Lógica sin React: la usan la UI y el worker.
 import type { BoardIssue } from "./shared.js";
+import { t } from "./i18n.js";
 
 /** Clave en `ctx.state` (alcance `instance`). */
 export const CONFIRM_STATE_KEY = "confirmations";
@@ -54,8 +55,8 @@ export function parseConfirmations(data: unknown): Confirmations | null {
 /** Ids de una acción del worker. Lanza si no vienen como lista de textos. */
 export function parseConfirmIds(params: Record<string, unknown>): string[] {
   const ids = params.ids;
-  if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string" || !id)) throw new Error('Falta "ids"');
-  if (ids.length > MAX_IDS) throw new Error(`Máximo ${MAX_IDS} tareas por vez`);
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string" || !id)) throw new Error(t('Falta "{key}"', { key: "ids" }));
+  if (ids.length > MAX_IDS) throw new Error(t("Máximo {max} tareas por vez", { max: MAX_IDS }));
   return [...new Set(ids as string[])];
 }
 

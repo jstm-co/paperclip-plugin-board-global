@@ -39,6 +39,7 @@
 // comentarios, comenta (`POST /api/issues/:id/comments`) y marca la tarea como
 // leída (`POST /api/issues/:id/read`), igual que la página nativa de la tarea.
 import type { CreateRequest, CreatedIssue } from "../create.js";
+import { getLocale } from "../i18n.js";
 import {
   OPEN_STATUSES,
   PLUGIN_KEY,
@@ -94,7 +95,7 @@ export async function listCompanies(): Promise<CompanyRef[]> {
 export async function getCompanyData<T>(key: string, companyId: string, params: Record<string, unknown> = {}): Promise<T> {
   const body = await request<{ data: T }>(`/plugins/${PLUGIN_KEY}/data/${encodeURIComponent(key)}`, {
     method: "POST",
-    body: JSON.stringify({ companyId, params }),
+    body: JSON.stringify({ companyId, params: { ...params, locale: getLocale() } }),
   });
   return body.data;
 }
@@ -107,7 +108,8 @@ export async function getCompanyData<T>(key: string, companyId: string, params: 
 export async function runAction<T>(key: string, companyId: string, params: Record<string, unknown> = {}): Promise<T> {
   const body = await request<{ data: T }>(`/plugins/${PLUGIN_KEY}/actions/${encodeURIComponent(key)}`, {
     method: "POST",
-    body: JSON.stringify({ companyId, params }),
+    // El idioma va con la acción: si el worker la rechaza, su mensaje sale en el de quien mira (JST-409).
+    body: JSON.stringify({ companyId, params: { ...params, locale: getLocale() } }),
   });
   return body.data;
 }

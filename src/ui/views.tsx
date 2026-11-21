@@ -20,8 +20,10 @@ import {
   type ViewOpResult,
   type ViewState,
 } from "../views.js";
+import { t } from "../i18n.js";
 import { Skeleton, cx, plural } from "./common.js";
 import { DIM_META, GROUP_META, LANE_META, valueLabel } from "./filters.js";
+import { tx } from "./i18n.js";
 import { Icon, type IconName } from "./icons.js";
 import { Popover, type ToastInput } from "./layer.js";
 import type { SavedViews } from "./useSavedViews.js";
@@ -33,29 +35,29 @@ function summaryItems(index: BoardIndex, query: BoardQuery): Array<{ icon: IconN
   const { filters } = query;
   const items: Array<{ icon: IconName; text: string }> = [
     query.view === "lista"
-      ? { icon: "list", text: `Lista por ${GROUP_META[query.group].label.toLowerCase()}` }
+      ? { icon: "list", text: t("Lista por {group}", { group: GROUP_META[query.group].label.toLowerCase() }) }
       : query.view === "pedidos"
-        ? { icon: "list-tree", text: "Pedidos" }
+        ? { icon: "list-tree", text: t("Pedidos") }
         : query.view === "backlog"
-          ? { icon: "layers", text: "Backlog" }
-          : { icon: "kanban", text: "Board" },
+          ? { icon: "layers", text: t("Backlog") }
+          : { icon: "kanban", text: t("Board") },
   ];
   if (query.view === "pedidos" && query.hide.length > 0) {
-    items.push({ icon: "eye-off", text: `Oculta títulos: ${query.hide.map((prefix) => `«${short(prefix, 24)}»`).join(", ")}` });
+    items.push({ icon: "eye-off", text: t("Oculta títulos: {list}", { list: query.hide.map((prefix) => t("«{text}»", { text: short(prefix, 24) })).join(", ") }) });
   }
   if (query.view === "kanban" && query.lanes !== DEFAULT_LANES) {
-    items.push({ icon: "rows", text: query.lanes ? `Agrupado por ${LANE_META[query.lanes].label.toLowerCase()}` : "Sin agrupar" });
+    items.push({ icon: "rows", text: query.lanes ? t("Agrupado por {group}", { group: LANE_META[query.lanes].label.toLowerCase() }) : t("Sin agrupar") });
   }
-  if (filters.toca) items.push({ icon: "reply", text: "Te toca" });
+  if (filters.toca) items.push({ icon: "reply", text: t("Te toca") });
   for (const dim of FILTER_DIMS) {
     const values = filters[dim] as readonly string[];
     if (values.length === 0) continue;
-    const shown = values.length <= 2 ? values.map((value) => valueLabel(index, dim, value)).join(", ") : `${values.length} valores`;
-    items.push({ icon: DIM_META[dim].icon, text: `${DIM_META[dim].label}: ${shown}` });
+    const shown = values.length <= 2 ? values.map((value) => valueLabel(index, dim, value)).join(", ") : t("{n} valores", { n: values.length });
+    items.push({ icon: DIM_META[dim].icon, text: t("{dim}: {shown}", { dim: DIM_META[dim].label, shown }) });
   }
-  if (filters.act) items.push({ icon: "clock", text: "Actualizada: últimos 7 días" });
-  if (filters.q.trim()) items.push({ icon: "search", text: `«${filters.q.trim()}»` });
-  if (query.showClosed) items.push({ icon: "eye", text: "Con hechas y canceladas" });
+  if (filters.act) items.push({ icon: "clock", text: t("Actualizada: últimos 7 días") });
+  if (filters.q.trim()) items.push({ icon: "search", text: t("«{text}»", { text: filters.q.trim() }) });
+  if (query.showClosed) items.push({ icon: "eye", text: t("Con hechas y canceladas") });
   return items;
 }
 
@@ -157,7 +159,7 @@ export function ViewTabs({
    */
   const write = async (
     op: ViewOp,
-    text: { verb: string; name: string; done: ReactNode },
+    text: { fail: (message: string) => ReactNode; name: string; done: ReactNode },
     onInvalid: (message: string) => void = () => undefined,
   ): Promise<void> => {
     let result: ViewOpResult;
@@ -166,17 +168,13 @@ export function ViewTabs({
     } catch (err) {
       toast({
         error: true,
-        content: (
-          <>
-            No se pudo {text.verb} la vista <b>{text.name}</b>: {(err as Error).message}
-          </>
-        ),
-        action: { label: "Reintentar", run: () => void write(op, text, onInvalid) },
+        content: text.fail((err as Error).message),
+        action: { label: t("Reintentar"), run: () => void write(op, text, onInvalid) },
       });
       return;
     }
     if (result.ok) toast({ content: text.done });
-    else if (result.reason === "not_found") toast({ content: `La vista «${text.name}» ya no existe. Se actualizó la lista.` });
+    else if (result.reason === "not_found") toast({ content: t("La vista «{name}» ya no existe. Se actualizó la lista.", { name: text.name }) });
     else onInvalid(result.message);
   };
 
@@ -188,13 +186,12 @@ export function ViewTabs({
     await write(
       { op: "create", id, name: clean, search: viewSearch(query) },
       {
-        verb: "guardar",
+        fail: (message) => tx("No se pudo guardar la vista {name}: {message}", { name: <b>{clean}</b>, message }),
         name: clean,
-        done: (
-          <>
-            Vista <b>{clean}</b> guardada <span className="gb-muted">· compartida en esta instancia</span>
-          </>
-        ),
+        done: tx("Vista {name} guardada {note}", {
+          name: <b>{clean}</b>,
+          note: <span className="gb-muted">{t("· compartida en esta instancia")}</span>,
+        }),
       },
       (message) => {
         // Otro navegador ya usó el nombre: vuelve el formulario con el error (§3.10).
@@ -210,13 +207,9 @@ export function ViewTabs({
     await write(
       { op: "rename", id: view.id, name: clean },
       {
-        verb: "renombrar",
+        fail: (message) => tx("No se pudo renombrar la vista {name}: {message}", { name: <b>{view.name}</b>, message }),
         name: view.name,
-        done: (
-          <>
-            Vista renombrada: <b>{clean}</b>
-          </>
-        ),
+        done: tx("Vista renombrada: {name}", { name: <b>{clean}</b> }),
       },
       (message) => setEditing({ id: view.id, value: clean, error: message }),
     );
@@ -228,13 +221,9 @@ export function ViewTabs({
     await write(
       { op: "update", id: view.id, search: viewSearch(query) },
       {
-        verb: "actualizar",
+        fail: (message) => tx("No se pudo actualizar la vista {name}: {message}", { name: <b>{view.name}</b>, message }),
         name: view.name,
-        done: (
-          <>
-            Vista <b>{view.name}</b> actualizada con los filtros de ahora
-          </>
-        ),
+        done: tx("Vista {name} actualizada con los filtros de ahora", { name: <b>{view.name}</b> }),
       },
     );
   };
@@ -246,13 +235,12 @@ export function ViewTabs({
     await write(
       { op: "delete", id: view.id },
       {
-        verb: "borrar",
+        fail: (message) => tx("No se pudo borrar la vista {name}: {message}", { name: <b>{view.name}</b>, message }),
         name: view.name,
-        done: (
-          <>
-            Vista <b>{view.name}</b> borrada <span className="gb-muted">· el board no cambió</span>
-          </>
-        ),
+        done: tx("Vista {name} borrada {note}", {
+          name: <b>{view.name}</b>,
+          note: <span className="gb-muted">{t("· el board no cambió")}</span>,
+        }),
       },
     );
   };
@@ -310,7 +298,7 @@ export function ViewTabs({
       onClick={openAll}
       onKeyDown={(event) => event.key === "Enter" && openAll()}
     >
-      Todo el board
+      {t("Todo el board")}
       {count(allCount)}
     </span>
   );
@@ -318,14 +306,14 @@ export function ViewTabs({
   const saveOff = (why: string) => (
     <button type="button" className="gb-btn is-sm is-ghost gb-save" disabled title={why}>
       <Icon name="plus" size={14} />
-      Guardar vista
+      {t("Guardar vista")}
     </button>
   );
 
   if (saved.status !== "ok") {
     const loading = saved.status === "loading";
     return (
-      <div className="gb-tabs" role="tablist" aria-label="Vistas guardadas" aria-busy={loading || undefined}>
+      <div className="gb-tabs" role="tablist" aria-label={t("Vistas guardadas")} aria-busy={loading || undefined}>
         {allTab}
         {loading ? (
           [112, 148, 92].map((width) => (
@@ -336,13 +324,13 @@ export function ViewTabs({
         ) : (
           <span className="gb-tabsmsg" role="status">
             <Icon name="circle-alert" size={14} />
-            No se pudieron cargar las vistas guardadas.
+            {t("No se pudieron cargar las vistas guardadas.")}
             <button type="button" className="gb-linkbtn" onClick={() => void saved.reload()}>
-              Reintentar
+              {t("Reintentar")}
             </button>
           </span>
         )}
-        {saveOff(loading ? "Cargando las vistas…" : "Primero hay que cargar las vistas")}
+        {saveOff(loading ? t("Cargando las vistas…") : t("Primero hay que cargar las vistas"))}
       </div>
     );
   }
@@ -352,7 +340,7 @@ export function ViewTabs({
 
   return (
     <>
-      <div ref={rowRef} className="gb-tabs" role="tablist" aria-label="Vistas guardadas">
+      <div ref={rowRef} className="gb-tabs" role="tablist" aria-label={t("Vistas guardadas")}>
         {allTab}
         {views.map((view) => {
           const on = view.id === tabId;
@@ -364,7 +352,7 @@ export function ViewTabs({
                   className={cx("gb-tabin", editing.error && "is-bad")}
                   value={editing.value}
                   maxLength={80}
-                  aria-label="Nombre de la vista"
+                  aria-label={t("Nombre de la vista")}
                   aria-invalid={editing.error ? true : undefined}
                   spellCheck={false}
                   autoFocus
@@ -395,7 +383,7 @@ export function ViewTabs({
                       {editing.error}
                     </>
                   ) : (
-                    "Enter guarda · Esc cancela"
+                    t("Enter guarda · Esc cancela")
                   )}
                 </span>
               </span>
@@ -410,17 +398,17 @@ export function ViewTabs({
               role="tab"
               aria-selected={on}
               tabIndex={0}
-              title={`${view.name} · doble clic para renombrar`}
+              title={t("{name} · doble clic para renombrar", { name: view.name })}
               onClick={(event) => onTabClick(event, view)}
               onKeyDown={(event) => onTabKey(event, view)}
             >
               <span className="gb-nm">{view.name}</span>
-              {mod ? <i className="gb-dot" title="Cambios sin guardar" /> : null}
+              {mod ? <i className="gb-dot" title={t("Cambios sin guardar")} /> : null}
               {count(tabCount(view))}
               <button
                 type="button"
                 className="gb-tabmenu"
-                aria-label={`Opciones de la vista ${view.name}`}
+                aria-label={t("Opciones de la vista {name}", { name: view.name })}
                 aria-haspopup="menu"
                 onClick={(event) => {
                   const tab = event.currentTarget.closest<HTMLElement>("[data-view-tab]")!;
@@ -440,7 +428,7 @@ export function ViewTabs({
           style={{ display: "none" }}
           onClick={(event) => setMenu({ kind: "more", anchor: event.currentTarget })}
         >
-          Más
+          {t("Más")}
           <span className="gb-n gb-tnum">{hidden.length}</span>
           <Icon name="chevron-down" size={14} />
         </button>
@@ -449,32 +437,32 @@ export function ViewTabs({
           type="button"
           className={cx("gb-btn", "is-sm", "gb-save", (state.kind === "all" || state.kind === "view") && "is-ghost")}
           disabled={state.kind === "view" || !index}
-          title={state.kind === "view" ? `Ya está guardada como «${state.view.name}»` : !index ? "Cargando las tareas…" : undefined}
+          title={state.kind === "view" ? t("Ya está guardada como «{name}»", { name: state.view.name }) : !index ? t("Cargando las tareas…") : undefined}
           onClick={(event) =>
             index &&
             setMenu({ kind: "save", anchor: event.currentTarget, name: suggestViewName(index, query, views), error: null })
           }
         >
           <Icon name={state.kind === "unsaved" ? "bookmark-plus" : "plus"} size={14} />
-          {state.kind === "mod" ? "Guardar como nueva" : "Guardar vista"}
+          {state.kind === "mod" ? t("Guardar como nueva") : t("Guardar vista")}
         </button>
         {views.length === 0 ? (
           <span className="gb-tabhint">
             <Icon name="bookmark" size={12} />
-            Guarda los filtros que usas seguido. Por ejemplo, «Bloqueadas de todas las empresas».
+            {t("Guarda los filtros que usas seguido. Por ejemplo, «Bloqueadas de todas las empresas».")}
           </span>
         ) : null}
         {modView ? (
           <span className="gb-modbar">
             <i className="gb-dot" />
-            Cambios sin guardar
-            <button type="button" className="gb-linkbtn" title={`Volver a los filtros guardados de «${modView.name}»`} onClick={() => openView(modView)}>
+            {t("Cambios sin guardar")}
+            <button type="button" className="gb-linkbtn" title={t("Volver a los filtros guardados de «{name}»", { name: modView.name })} onClick={() => openView(modView)}>
               <Icon name="undo-2" size={12} />
-              Descartar
+              {t("Descartar")}
             </button>
             <button type="button" className="gb-btn is-sm is-primary" onClick={() => void update(modView)}>
               <Icon name="check" size={14} />
-              Actualizar vista
+              {t("Actualizar vista")}
             </button>
           </span>
         ) : null}
@@ -485,8 +473,8 @@ export function ViewTabs({
           <div className="gb-mh">{short(menuView.name, 36)}</div>
           <button type="button" className="gb-mi" onClick={() => startRename(menuView)}>
             <Icon name="pencil" size={14} />
-            <span className="gb-lbl">Renombrar</span>
-            <span className="gb-kbd">doble clic</span>
+            <span className="gb-lbl">{t("Renombrar")}</span>
+            <span className="gb-kbd">{t("doble clic")}</span>
           </button>
           <button
             type="button"
@@ -495,25 +483,25 @@ export function ViewTabs({
             onClick={() => modView?.id === menuView.id && void update(menuView)}
           >
             <Icon name="refresh" size={14} />
-            <span className="gb-lbl">Actualizar con los filtros de ahora</span>
+            <span className="gb-lbl">{t("Actualizar con los filtros de ahora")}</span>
           </button>
           <div className="gb-msep" />
           <button type="button" className="gb-mi is-danger" onClick={() => setMenu({ kind: "confirm", id: menuView.id, anchor: menu.anchor })}>
             <Icon name="trash-2" size={14} />
-            <span className="gb-lbl">Borrar vista…</span>
+            <span className="gb-lbl">{t("Borrar vista…")}</span>
           </button>
         </Popover>
       ) : null}
 
       {menu?.kind === "confirm" && menuView ? (
-        <Popover anchor={menu.anchor} width={300} className="gb-form" role="dialog" label="Confirmar borrado" onClose={() => setMenu(null)}>
+        <Popover anchor={menu.anchor} width={300} className="gb-form" role="dialog" label={t("Confirmar borrado")} onClose={() => setMenu(null)}>
           <ConfirmDelete view={menuView} onCancel={() => setMenu(null)} onConfirm={() => void remove(menuView)} />
         </Popover>
       ) : null}
 
       {menu?.kind === "more" ? (
         <Popover anchor={menu.anchor} width={280} onClose={() => setMenu(null)}>
-          <div className="gb-mh">Más vistas</div>
+          <div className="gb-mh">{t("Más vistas")}</div>
           {hidden.flatMap((id) => {
             const view = byId(id);
             if (!view) return [];
@@ -529,7 +517,7 @@ export function ViewTabs({
       ) : null}
 
       {menu?.kind === "save" && index ? (
-        <Popover anchor={menu.anchor} width={320} className="gb-form" role="dialog" label="Guardar vista" onClose={() => setMenu(null)}>
+        <Popover anchor={menu.anchor} width={320} className="gb-form" role="dialog" label={t("Guardar vista")} onClose={() => setMenu(null)}>
           <SaveForm
             index={index}
             query={query}
@@ -551,17 +539,17 @@ function ConfirmDelete({ view, onCancel, onConfirm }: { view: SavedView; onCance
   useEffect(() => cancelRef.current?.focus(), []);
   return (
     <>
-      <h4>¿Borrar la vista «{view.name}»?</h4>
+      <h4>{t("¿Borrar la vista «{name}»?", { name: view.name })}</h4>
       <p className="gb-dsub">
-        <b>Se borra para todos los que usan esta instancia.</b> Las tareas y los filtros de ahora no cambian.
+        <b>{t("Se borra para todos los que usan esta instancia.")}</b> {t("Las tareas y los filtros de ahora no cambian.")}
       </p>
       <div className="gb-acts">
         <button ref={cancelRef} type="button" className="gb-btn is-sm is-ghost" onClick={onCancel}>
-          Cancelar
+          {t("Cancelar")}
         </button>
         <button type="button" className="gb-btn is-sm is-danger" onClick={onConfirm}>
           <Icon name="trash-2" size={14} />
-          Borrar
+          {t("Borrar")}
         </button>
       </div>
     </>
@@ -607,10 +595,10 @@ function SaveForm({
   const shown = queryCount(index, query, now);
   return (
     <>
-      <h4>Guardar vista</h4>
-      <p className="gb-dsub">Guarda los filtros, la vista y la agrupación de ahora para volver con un clic.</p>
+      <h4>{t("Guardar vista")}</h4>
+      <p className="gb-dsub">{t("Guarda los filtros, la vista y la agrupación de ahora para volver con un clic.")}</p>
       <div className="gb-field">
-        <label htmlFor="gb-view-name">Nombre</label>
+        <label htmlFor="gb-view-name">{t("Nombre")}</label>
         <input
           ref={inputRef}
           id="gb-view-name"
@@ -640,7 +628,7 @@ function SaveForm({
                 {error}
               </>
             ) : (
-              `Hasta ${VIEW_NAME_MAX} caracteres. No se puede repetir.`
+              t("Hasta {max} caracteres. No se puede repetir.", { max: VIEW_NAME_MAX })
             )}
           </span>
           <span className="gb-tnum">
@@ -649,7 +637,7 @@ function SaveForm({
         </div>
       </div>
       <div className="gb-field" style={{ marginTop: 12 }}>
-        <label>Qué guarda</label>
+        <label>{t("Qué guarda")}</label>
         <div className="gb-sums">
           {summaryItems(index, query).map((item) => (
             <span key={item.text} className="gb-sum">
@@ -661,18 +649,18 @@ function SaveForm({
       </div>
       <div className="gb-count">
         <Icon name="eye" size={12} />
-        Ahora muestra {query.view === "pedidos" ? plural(shown, "pedido", "pedidos") : plural(shown, "tarea", "tareas")}
+        {t("Ahora muestra {what}", { what: query.view === "pedidos" ? plural(shown, "pedido", "pedidos") : plural(shown, "tarea", "tareas") })}
       </div>
       <div className="gb-count is-shared">
         <Icon name="users" size={12} />
-        La ven y la pueden cambiar todos en esta instancia
+        {t("La ven y la pueden cambiar todos en esta instancia")}
       </div>
       <div className="gb-acts">
         <button type="button" className="gb-btn is-sm is-ghost" onClick={onCancel}>
-          Cancelar
+          {t("Cancelar")}
         </button>
         <button type="button" className="gb-btn is-sm is-primary" onClick={submit}>
-          Guardar vista
+          {t("Guardar vista")}
         </button>
       </div>
     </>

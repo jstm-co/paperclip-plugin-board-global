@@ -119,6 +119,14 @@ Son los mismos datos que usa el Dashboard nativo, pedidos para cada empresa con 
 | Agentes en vivo | `GET /api/companies/:id/live-runs?minCount=4` |
 | Actividad reciente | `GET /api/companies/:id/activity?limit=10` |
 
+## Idiomas
+
+La interfaz viene en **español** e **inglés**. Sigue el idioma del navegador (cualquier otro idioma queda en inglés) y el botón con el globo, en la cabecera de las dos páginas, deja elegir uno; la elección se guarda en ese navegador. Las fechas y los números siguen el idioma de la interfaz.
+
+No se traducen el nombre del plugin en el administrador de plugins de Paperclip ni los valores de la URL (`v=lista`, `carr=empresa`…).
+
+Para sumar un idioma, copia `src/i18n/en/` a `src/i18n/<código>/`, traduce los valores (las claves son los textos en español del código y quedan como están) y regístralo en `LOCALES` y `CATALOGS` de `src/i18n.ts`. `npm test` revisa que cada catálogo tenga todos los textos que usa el código, ninguno que no use y los mismos `{marcadores}`.
+
 ## Requisitos
 
 - Paperclip `2026.824.1` o compatible.

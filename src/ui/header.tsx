@@ -3,24 +3,26 @@
 // altas» son filtros rápidos de la barra, y Bloqueadas y En revisión, columnas.
 import { useHostNavigation } from "@paperclipai/plugin-sdk/ui";
 import type { BoardView } from "../board.js";
+import { t } from "../i18n.js";
 import { DASHBOARD_ROUTE } from "../shared.js";
 import { cx, plural } from "./common.js";
 import { CreateHeadButton } from "./create.js";
 import { Icon, type IconName } from "./icons.js";
+import { LanguageButton } from "./lang.js";
 
 function updatedLabel(loadedAt: number | null, now: number): string {
   if (!loadedAt) return "";
   const minutes = Math.floor((now - loadedAt) / 60_000);
-  if (minutes < 1) return "Actualizado hace un momento";
-  if (minutes < 60) return `Actualizado hace ${minutes} min`;
-  return `Actualizado hace ${Math.floor(minutes / 60)} h`;
+  if (minutes < 1) return t("Actualizado hace un momento");
+  if (minutes < 60) return t("Actualizado hace {n} min", { n: minutes });
+  return t("Actualizado hace {n} h", { n: Math.floor(minutes / 60) });
 }
 
 const VIEW_META: Record<BoardView, { label: string; icon: IconName; title: string }> = {
-  kanban: { label: "Board", icon: "kanban", title: "Lo que está en marcha: Por hacer, En curso, En revisión y Bloqueada" },
-  backlog: { label: "Backlog", icon: "layers", title: "Lo que todavía no entra al Board" },
-  lista: { label: "Lista", icon: "list", title: "Todas las tareas en una lista agrupada" },
-  pedidos: { label: "Pedidos", icon: "list-tree", title: "Una fila por pedido (tarea sin padre) con el resumen de todas sus subtareas" },
+  kanban: { label: t("Board"), icon: "kanban", title: t("Lo que está en marcha: Por hacer, En curso, En revisión y Bloqueada") },
+  backlog: { label: t("Backlog"), icon: "layers", title: t("Lo que todavía no entra al Board") },
+  lista: { label: t("Lista"), icon: "list", title: t("Todas las tareas en una lista agrupada") },
+  pedidos: { label: t("Pedidos"), icon: "list-tree", title: t("Una fila por pedido (tarea sin padre) con el resumen de todas sus subtareas") },
 };
 const VIEW_ORDER: readonly BoardView[] = ["kanban", "backlog", "lista", "pedidos"];
 
@@ -48,15 +50,19 @@ export function Header({
 }) {
   const navigation = useHostNavigation();
   const n = companyCount ?? 4;
-  const subtitle = loading ? `Cargando las tareas de ${plural(n, "empresa", "empresas")}…` : `Tareas de ${n === 1 ? "1 empresa" : `las ${n} empresas`}`;
+  const subtitle = loading
+    ? t("Cargando las tareas de {companies}…", { companies: plural(n, "empresa", "empresas") })
+    : n === 1
+      ? t("Tareas de 1 empresa")
+      : t("Tareas de las {n} empresas", { n });
   return (
     <div className="gb-head">
       <div className="gb-headtx">
         <div className="gb-title">
-          <h1>Board global</h1>
+          <h1>{t("Board global")}</h1>
           {/* El menú lateral del espacio «Coordinator» no trae las entradas del plugin: el Dashboard se alcanza desde acá. */}
-          <a {...navigation.linkProps(`/${DASHBOARD_ROUTE}`)} className="gb-xlink" title="Dashboard global: la comparativa entre empresas">
-            Dashboard global
+          <a {...navigation.linkProps(`/${DASHBOARD_ROUTE}`)} className="gb-xlink" title={t("Dashboard global: la comparativa entre empresas")}>
+            {t("Dashboard global")}
             <Icon name="chevron-right" size={12} />
           </a>
         </div>
@@ -66,7 +72,7 @@ export function Header({
         </div>
       </div>
       <span className="gb-sp" />
-      <div className="gb-seg" role="group" aria-label="Vista">
+      <div className="gb-seg" role="group" aria-label={t("Vista")}>
         {VIEW_ORDER.map((key) => {
           const meta = VIEW_META[key];
           return (
@@ -81,13 +87,14 @@ export function Header({
       <button
         type="button"
         className={cx("gb-btn", "is-icon", refreshing && "is-spinning")}
-        title="Actualizar"
-        aria-label="Actualizar"
+        title={t("Actualizar")}
+        aria-label={t("Actualizar")}
         onClick={onRefresh}
         disabled={loading || refreshing}
       >
         <Icon name="refresh" size={14} />
       </button>
+      <LanguageButton />
       <CreateHeadButton disabled={loading} />
     </div>
   );

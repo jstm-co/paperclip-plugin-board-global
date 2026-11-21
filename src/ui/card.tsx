@@ -15,6 +15,8 @@ import {
   waitBlockerOf,
   type BoardIndex,
 } from "../board.js";
+import { t } from "../i18n.js";
+import { tx } from "./i18n.js";
 import { isOpenStatus, type BoardIssue } from "../shared.js";
 import {
   Avatar,
@@ -52,10 +54,10 @@ function WaitLine({ index, issue }: { index: BoardIndex; issue: BoardIssue }) {
   const blocker = waitBlockerOf(index, issue);
   if (!blocker) return null;
   return (
-    <div className="gb-wait-line is-dep" title={`Bloqueada hasta que respondas en ${blocker.identifier ?? ""}`}>
+    <div className="gb-wait-line is-dep" title={t("Bloqueada hasta que respondas en {id}", { id: blocker.identifier ?? "" })}>
       <Icon name="link" size={12} />
       <span className="gb-what">
-        Espera tu respuesta en <b className="gb-mono">{blocker.identifier}</b>
+        {tx("Espera tu respuesta en {id}", { id: <b className="gb-mono">{blocker.identifier}</b> })}
       </span>
     </div>
   );
@@ -66,7 +68,7 @@ export function ContextChip({ index, issue }: { index: BoardIndex; issue: BoardI
   const parent = issue.parentId ? index.byId.get(issue.parentId) : undefined;
   if (parent) {
     return (
-      <span className="gb-parchip" title={`Subtarea de ${parent.identifier ?? ""} · ${parent.title}`}>
+      <span className="gb-parchip" title={t("Subtarea de {id} · {title}", { id: parent.identifier ?? "", title: parent.title })}>
         <Icon name="corner-down-right" size={12} />
         {parent.identifier}
       </span>
@@ -75,7 +77,7 @@ export function ContextChip({ index, issue }: { index: BoardIndex; issue: BoardI
   if (!issue.projectId) return null;
   const project = projectLabel(index, issue.projectId);
   return (
-    <span className="gb-prjchip" title={`Proyecto: ${project}`}>
+    <span className="gb-prjchip" title={t("Proyecto: {project}", { project })}>
       <Icon name="folder" size={12} />
       <span>{project}</span>
     </span>
@@ -87,7 +89,7 @@ export function SubtaskCount({ index, issue }: { index: BoardIndex; issue: Board
   const progress = progressOf(index, issue);
   if (progress.total === 0) return null;
   return (
-    <span className="gb-subn gb-tnum" title={`${progress.done} de ${progress.total} subtareas hechas`}>
+    <span className="gb-subn gb-tnum" title={t("{done} de {total} subtareas hechas", { done: progress.done, total: progress.total })}>
       <Icon name="list-tree" size={12} />
       {progress.done}/{progress.total}
     </span>
@@ -158,11 +160,11 @@ export const Card = memo(function Card({ index, issue, pending = false, dragging
         <button
           type="button"
           className="gb-confirm"
-          title="Ya la revisé: sale de «Por confirmar» y queda entre las cerradas"
+          title={t("Ya la revisé: sale de «Por confirmar» y queda entre las cerradas")}
           onClick={() => onConfirm(issue)}
         >
           <Icon name="check" size={14} />
-          Confirmar
+          {t("Confirmar")}
         </button>
       ) : null}
     </div>
@@ -193,7 +195,7 @@ export function WaitNote({ index, issue, now, children }: { index: BoardIndex; i
           {unblocks.length > 0 ? (
             <>
               <br />
-              <span className="gb-muted">Al responder se desbloquean {unblocks.map((u) => u.identifier).join(", ")}</span>
+              <span className="gb-muted">{t("Al responder se desbloquean {ids}", { ids: unblocks.map((u) => u.identifier).join(", ") })}</span>
             </>
           ) : null}
         </span>
@@ -208,17 +210,16 @@ export function WaitNote({ index, issue, now, children }: { index: BoardIndex; i
     <div className="gb-peek-toca is-dep">
       <Icon name="link" size={14} />
       <span>
-        Bloqueada por <b className="gb-mono">{directBlocker.identifier}</b>
-        {waitBlocker && waitBlocker.id !== directBlocker.id ? (
-          <>
-            , que espera a <b className="gb-mono">{waitBlocker.identifier}</b>
-          </>
-        ) : null}
-        .
+        {waitBlocker && waitBlocker.id !== directBlocker.id
+          ? tx("Bloqueada por {id}, que espera a {waiting}.", {
+              id: <b className="gb-mono">{directBlocker.identifier}</b>,
+              waiting: <b className="gb-mono">{waitBlocker.identifier}</b>,
+            })
+          : tx("Bloqueada por {id}.", { id: <b className="gb-mono">{directBlocker.identifier}</b> })}
         {waitBlocker ? (
           <>
             {" "}
-            <b>{waitBlocker.identifier}</b> espera tu respuesta.
+            {tx("{id} espera tu respuesta.", { id: <b>{waitBlocker.identifier}</b> })}
           </>
         ) : null}
       </span>
@@ -272,11 +273,11 @@ export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: 
         </div>
         <div className="gb-prow">
           <Avatar name={who} size={16} />
-          <b>{who ?? "Sin asignar"}</b>
+          <b>{who ?? t("Sin asignar")}</b>
         </div>
         <div className="gb-prow">
           <Icon name="clock" size={14} />
-          Actualizada {relativeTime(issue.updatedAt, now)}
+          {t("Actualizada {when}", { when: relativeTime(issue.updatedAt, now) })}
         </div>
         {issue.labels.length > 0 ? (
           <div className="gb-labels">
@@ -292,13 +293,13 @@ export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: 
           <div className="gb-tree">
             <div className="gb-tree-h">
               <Icon name="list-tree" size={12} />
-              <span>Árbol</span>
+              <span>{t("Árbol")}</span>
               {progress.total > 0 ? (
                 <>
                   <span className="gb-sp" />
                   <ProgressBar done={progress.done} total={progress.total} width={56} />
                   <span className="gb-tnum">
-                    {progress.done}/{progress.total} hechas
+                    {t("{done}/{total} hechas", { done: progress.done, total: progress.total })}
                   </span>
                 </>
               ) : null}
@@ -312,14 +313,14 @@ export function Peek({ index, issue, anchor, now }: { index: BoardIndex; issue: 
             ))}
             {kids.length > 5 ? (
               <div className="gb-trmore" style={{ "--d": ancestors.length + 1 } as CSSProperties}>
-                y {kids.length - 5} subtareas más
+                {t("y {n} subtareas más", { n: kids.length - 5 })}
               </div>
             ) : null}
           </div>
         ) : null}
         <div className="gb-popen">
           <Icon name="external-link" size={12} />
-          Clic para abrirla aquí · Ctrl o ⌘ + clic: su página
+          {t("Clic para abrirla aquí · Ctrl o ⌘ + clic: su página")}
         </div>
       </div>
     </Layer>

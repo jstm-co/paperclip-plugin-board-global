@@ -2,6 +2,7 @@
 // las corridas activas («Trabajando ahora») y el último comentario de cada
 // pedido visible («Última novedad»).
 import { useEffect, useMemo, useRef, useState } from "react";
+import { t } from "../i18n.js";
 import { userLabel, type BoardIndex } from "../board.js";
 import { commentLine } from "../pedidos.js";
 import type { BoardIssue, LiveRun } from "../shared.js";
@@ -80,12 +81,12 @@ export function usePedidoNotes(index: BoardIndex | null, roots: readonly BoardIs
           if (comment && text) {
             const { index: current, userId: me } = context.current;
             const author = comment.authorAgentId
-              ? (current?.agentById.get(comment.authorAgentId)?.name ?? "Agente")
+              ? (current?.agentById.get(comment.authorAgentId)?.name ?? t("Agente"))
               : comment.authorUserId
                 ? comment.authorUserId === me
-                  ? "Tú"
+                  ? t("Tú")
                   : userLabel(comment.authorUserId)
-                : "Sistema";
+                : t("Sistema");
             note = { text, at: comment.createdAt, author };
           }
         } catch {
