@@ -1,10 +1,9 @@
 // Lógica del board sin React: estado en la URL, índice multiempresa, «Te toca»,
-// árbol de subtareas, filtrado, orden, agrupación y contadores. La usa la UI y
-// la cubren las pruebas.
+// árbol de subtareas, filtrado, orden, agrupación, carriles y columnas del
+// Board. La usa la UI y la cubren las pruebas.
 import {
   ISSUE_PRIORITIES,
   ISSUE_STATUSES,
-  OPEN_STATUSES,
   isOpenStatus,
   type AttentionItem,
   type BoardIssue,
@@ -18,8 +17,12 @@ import {
 // Estado en la URL (design-spec §5)
 // ---------------------------------------------------------------------------
 
-/** `pedidos`: una fila por tarea raíz con el resumen de su subárbol (`pedidos.ts`). */
-export const BOARD_VIEWS = ["kanban", "lista", "pedidos"] as const;
+/**
+ * `kanban` es el Board; `backlog`, la lista de lo que todavía no entra al Board
+ * (JST-407); `pedidos`, una fila por tarea raíz con el resumen de su subárbol
+ * (`pedidos.ts`).
+ */
+export const BOARD_VIEWS = ["kanban", "backlog", "lista", "pedidos"] as const;
 export type BoardView = (typeof BOARD_VIEWS)[number];
 
 export const GROUP_BY_OPTIONS = ["empresa", "estado", "proyecto", "responsable", "prioridad"] as const;
@@ -28,6 +31,9 @@ export type GroupBy = (typeof GROUP_BY_OPTIONS)[number];
 /** Carriles del kanban (Fase 2, design-spec §8): filas por empresa, proyecto o responsable. */
 export const LANE_OPTIONS = ["empresa", "proyecto", "responsable"] as const satisfies readonly GroupBy[];
 export type LaneBy = (typeof LANE_OPTIONS)[number];
+/** El Board abre agrupado por empresa (JST-407). Sin agrupar viaja en la URL como `carr=no`. */
+export const DEFAULT_LANES: LaneBy = "empresa";
+const NO_LANES_PARAM = "no";
 
 /** Filtros de selección múltiple. La clave es el parámetro de la URL. */
 export const FILTER_DIMS = ["emp", "prj", "est", "resp", "pri", "eti"] as const;
@@ -67,10 +73,13 @@ export interface BoardFilters {
 export interface BoardQuery {
   view: BoardView;
   group: GroupBy;
-  /** `carr`: carriles del kanban; `null` = sin carriles. */
+  /** `carr`: carriles del kanban; por empresa si no viene y `null` (`carr=no`) = sin agrupar. */
   lanes: LaneBy | null;
   filters: BoardFilters;
-  /** `sub=0`: subtareas plegadas en todas las tarjetas. */
+  /**
+   * `sub=0`. Desde JST-407 las tarjetas no despliegan subtareas, así que no cambia
+   * nada en pantalla; se conserva para no alterar las URL y vistas ya guardadas.
+   */
   subtasksCollapsed: boolean;
   /** `cerr=1`: columnas Hecha y Cancelada visibles; en Pedidos, los pedidos cerrados. */
   showClosed: boolean;
@@ -83,13 +92,13 @@ export function emptyFilters(): BoardFilters {
 }
 
 export function defaultQuery(): BoardQuery {
-  return { view: "kanban", group: "empresa", lanes: null, filters: emptyFilters(), subtasksCollapsed: false, showClosed: false, hide: [] };
+  return { view: "kanban", group: "empresa", lanes: DEFAULT_LANES, filters: emptyFilters(), subtasksCollapsed: false, showClosed: false, hide: [] };
 }
 
 /**
- * «Todo el board» (§3.1 de JST-21): sin filtros, carriles ni títulos ocultos.
- * Conserva la vista (Kanban, Lista o Pedidos), la agrupación, las subtareas
- * plegadas y las cerradas.
+ * «Todo el board» (§3.1 de JST-21): sin filtros ni títulos ocultos y agrupado
+ * por empresa. Conserva la vista (Board, Backlog, Lista o Pedidos), la
+ * agrupación de la Lista, las subtareas plegadas y las cerradas.
  */
 export function allBoardQuery(query: BoardQuery): BoardQuery {
   return { ...defaultQuery(), view: query.view, group: query.group, subtasksCollapsed: query.subtasksCollapsed, showClosed: query.showClosed };
@@ -144,7 +153,7 @@ export function parseBoardQuery(search: string): BoardQuery {
   return {
     view: (BOARD_VIEWS as readonly string[]).includes(view ?? "") ? (view as BoardView) : "kanban",
     group: (GROUP_BY_OPTIONS as readonly string[]).includes(group ?? "") ? (group as GroupBy) : "empresa",
-    lanes: (LANE_OPTIONS as readonly string[]).includes(lanes ?? "") ? (lanes as LaneBy) : null,
+    lanes: lanes === NO_LANES_PARAM ? null : (LANE_OPTIONS as readonly string[]).includes(lanes ?? "") ? (lanes as LaneBy) : DEFAULT_LANES,
     filters: {
       emp: readList(params, "emp").map((prefix) => prefix.toUpperCase()),
       prj: readList(params, "prj"),
@@ -183,7 +192,7 @@ export function serializeBoardQuery(query: BoardQuery): string {
   if (filters.toca) parts.push("toca=1");
   if (filters.act) parts.push(`act=${filters.act}`);
   if (query.group !== "empresa") parts.push(`grp=${query.group}`);
-  if (query.lanes) parts.push(`carr=${query.lanes}`);
+  if (query.lanes !== DEFAULT_LANES) parts.push(`carr=${query.lanes ?? NO_LANES_PARAM}`);
   if (query.subtasksCollapsed) parts.push("sub=0");
   if (query.showClosed) parts.push("cerr=1");
   add("ocu", [...query.hide].sort((a, b) => a.localeCompare(b, "es")));
@@ -434,14 +443,6 @@ export function sortSubtasks(index: BoardIndex, issues: readonly BoardIssue[]): 
   );
 }
 
-/** Filas de subtareas de la tarjeta: hijas y, sangradas, nietas (§3.8). */
-export function subtaskRows(index: BoardIndex, issue: BoardIssue): Array<{ issue: BoardIssue; depth: number }> {
-  return sortSubtasks(index, childrenOf(index, issue)).flatMap((kid) => [
-    { issue: kid, depth: 0 },
-    ...sortSubtasks(index, childrenOf(index, kid)).map((grandkid) => ({ issue: grandkid, depth: 1 })),
-  ]);
-}
-
 // ---------------------------------------------------------------------------
 // Dependencias de «Te toca»
 // ---------------------------------------------------------------------------
@@ -600,22 +601,34 @@ export function dateCounts(index: BoardIndex, filters: BoardFilters, now: number
   return counts;
 }
 
-/** Columnas del kanban: las del filtro de estado o, si no hay, las abiertas (todas con `cerr=1`). */
+/** Columnas del Board sin filtro de estado: el Backlog tiene su propia vista (JST-407). */
+export const BOARD_STATUSES = ["todo", "in_progress", "in_review", "blocked"] as const satisfies readonly IssueStatus[];
+/** Lo que lista la vista Backlog: lo que espera entrar y, arriba, lo que ya está en «Por hacer». */
+export const BACKLOG_STATUSES = ["todo", "backlog"] as const satisfies readonly IssueStatus[];
+
+/** Columnas del kanban: las del filtro de estado o, si no hay, las del Board (más las cerradas con `cerr=1`). */
 export function kanbanStatuses(filters: BoardFilters, showClosed: boolean): readonly IssueStatus[] {
   if (filters.est.length > 0) return ISSUE_STATUSES.filter((status) => filters.est.includes(status));
-  return showClosed ? ISSUE_STATUSES : OPEN_STATUSES;
+  return showClosed ? ISSUE_STATUSES.filter((status) => status !== "backlog") : BOARD_STATUSES;
 }
 
-/** Lo que muestra una consulta: en el kanban, solo las tareas de las columnas visibles. */
+/** Estados que muestra cada vista: las columnas del Board, lo del Backlog o todo. */
+function viewStatuses(query: Pick<BoardQuery, "view" | "filters" | "showClosed">): readonly IssueStatus[] {
+  if (query.view === "kanban") return kanbanStatuses(query.filters, query.showClosed);
+  if (query.view === "backlog") return BACKLOG_STATUSES;
+  return ISSUE_STATUSES;
+}
+
+/** Lo que muestra una consulta: en el Board, solo las tareas de las columnas visibles; en el Backlog, las suyas. */
 export function visibleIssues(
   index: BoardIndex,
   query: Pick<BoardQuery, "view" | "filters" | "showClosed">,
   now: number = Date.now(),
 ): BoardIssue[] {
   const issues = filterIssues(index, query.filters, undefined, now);
-  if (query.view !== "kanban") return issues;
-  const columns = kanbanStatuses(query.filters, query.showClosed);
-  return issues.filter((issue) => columns.includes(issue.status));
+  if (query.view !== "kanban" && query.view !== "backlog") return issues;
+  const statuses = viewStatuses(query);
+  return issues.filter((issue) => statuses.includes(issue.status));
 }
 
 /**
@@ -635,7 +648,7 @@ export function relaxSuggestions(
   if (filters.act) keys.push("act");
   return keys
     .map((key) => {
-      const columns = layout?.view === "kanban" ? kanbanStatuses(clearFilter(filters, key), layout.showClosed) : ISSUE_STATUSES;
+      const columns = layout ? viewStatuses({ ...layout, filters: clearFilter(filters, key) }) : ISSUE_STATUSES;
       return { key, count: filterIssues(index, filters, key, now).filter((issue) => columns.includes(issue.status)).length };
     })
     .filter((suggestion) => suggestion.count > 0);
@@ -655,85 +668,14 @@ export function toggleValue(filters: BoardFilters, dim: FilterDim, value: string
 }
 
 // ---------------------------------------------------------------------------
-// Contadores (§3.2) y «Abiertas por empresa» (§3.3)
+// Filtros rápidos (JST-407)
 // ---------------------------------------------------------------------------
 
-export const KPI_KEYS = ["toca", "bloq", "crit", "rev"] as const;
-export type KpiKey = (typeof KPI_KEYS)[number];
+/** «Críticas y altas»: el filtro de prioridad con exactamente esas dos. */
+export const HOT_PRIORITIES = ["critical", "high"] as const satisfies readonly IssuePriority[];
 
-export interface Kpi {
-  key: KpiKey;
-  issues: BoardIssue[];
-  byCompany: Array<{ company: BoardCompany; count: number }>;
-}
-
-const KPI_TESTS: Record<KpiKey, (index: BoardIndex, issue: BoardIssue) => boolean> = {
-  toca: (index, issue) => index.waiting.has(issue.id),
-  bloq: (_index, issue) => issue.status === "blocked",
-  crit: (_index, issue) => isOpenStatus(issue.status) && (issue.priority === "critical" || issue.priority === "high"),
-  rev: (_index, issue) => issue.status === "in_review",
-};
-
-/** Los contadores solo respetan el filtro de empresa: así no bajan a 0 al filtrar otra cosa. */
-export function computeKpis(index: BoardIndex, companies: readonly string[]): Record<KpiKey, Kpi> {
-  const scope = index.issues.filter(
-    (issue) => companies.length === 0 || companies.includes(index.companyById.get(issue.companyId)?.prefix ?? ""),
-  );
-  const result = {} as Record<KpiKey, Kpi>;
-  for (const key of KPI_KEYS) {
-    const issues = scope.filter((issue) => KPI_TESTS[key](index, issue));
-    const byCompany = index.companies
-      .map((company) => ({ company, count: issues.filter((issue) => issue.companyId === company.id).length }))
-      .filter((entry) => entry.count > 0);
-    result[key] = { key, issues, byCompany };
-  }
-  return result;
-}
-
-const KPI_PATCHES: Record<KpiKey, Partial<BoardFilters>> = {
-  toca: { toca: true },
-  bloq: { est: ["blocked"] },
-  crit: { pri: ["critical", "high"] },
-  rev: { est: ["in_review"] },
-};
-
-function sameValues(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && b.every((value) => a.includes(value));
-}
-
-export function isKpiActive(filters: BoardFilters, key: KpiKey): boolean {
-  if (key === "toca") return filters.toca;
-  return Object.entries(KPI_PATCHES[key]).every(([dim, values]) =>
-    sameValues(filters[dim as FilterDim] as readonly string[], values as readonly string[]),
-  );
-}
-
-/** Un clic reemplaza estado, prioridad, responsable y «Te toca» por los del contador; otro clic los quita. */
-export function applyKpi(filters: BoardFilters, key: KpiKey): BoardFilters {
-  if (isKpiActive(filters, key)) {
-    return key === "toca" ? { ...filters, toca: false } : { ...filters, ...Object.fromEntries(Object.keys(KPI_PATCHES[key]).map((k) => [k, []])) };
-  }
-  return { ...filters, est: [], pri: [], resp: [], toca: false, ...KPI_PATCHES[key] };
-}
-
-export interface CompanyOpenSummary {
-  company: BoardCompany;
-  total: number;
-  byStatus: Array<{ status: IssueStatus; count: number }>;
-}
-
-/** Abiertas por empresa y estado, sin filtros: el panel también es el filtro de empresa. */
-export function openByCompany(index: BoardIndex): CompanyOpenSummary[] {
-  return index.companies.map((company) => {
-    const open = index.issues.filter((issue) => issue.companyId === company.id && isOpenStatus(issue.status));
-    return {
-      company,
-      total: open.length,
-      byStatus: OPEN_STATUSES.map((status) => ({ status, count: open.filter((issue) => issue.status === status).length })).filter(
-        (entry) => entry.count > 0,
-      ),
-    };
-  });
+export function isHotFilter(filters: BoardFilters): boolean {
+  return filters.pri.length === HOT_PRIORITIES.length && HOT_PRIORITIES.every((priority) => filters.pri.includes(priority));
 }
 
 // ---------------------------------------------------------------------------
@@ -836,6 +778,29 @@ export function laneKeyOf(issue: BoardIssue, laneBy: LaneBy): string {
   return groupKey(issue, laneBy);
 }
 
+/**
+ * «Por confirmar» (JST-407): columna del Board que no es un estado de Paperclip.
+ * Junta las tareas cerradas que esperan el visto bueno de la persona (`confirm.ts`).
+ */
+export const CONFIRM_COLUMN = "confirm";
+export type BoardColumn = IssueStatus | typeof CONFIRM_COLUMN;
+
+/** Columna de la tarea: su estado, salvo las cerradas que esperan confirmación. */
+export function columnOf(issue: BoardIssue, pending?: ReadonlySet<string>): BoardColumn {
+  return pending?.has(issue.id) ? CONFIRM_COLUMN : issue.status;
+}
+
+/**
+ * Columnas del Board: los estados de `kanbanStatuses` y, sin filtro de estado,
+ * «Por confirmar» después de la última columna abierta.
+ */
+export function boardColumns(filters: BoardFilters, showClosed: boolean, withConfirm: boolean): BoardColumn[] {
+  const statuses = kanbanStatuses(filters, showClosed);
+  if (!withConfirm || filters.est.length > 0) return [...statuses];
+  const open = statuses.filter(isOpenStatus);
+  return [...open, CONFIRM_COLUMN, ...statuses.filter((status) => !isOpenStatus(status))];
+}
+
 export interface KanbanLane {
   key: string;
   label: string;
@@ -843,22 +808,42 @@ export interface KanbanLane {
   companyId: string | null;
   /** Tareas del carril en las columnas visibles. */
   total: number;
-  /** Una celda por columna, en el orden de `statuses`, ordenada como cada grupo (§5). */
-  cells: Array<{ status: IssueStatus; issues: BoardIssue[] }>;
+  /** Una celda por columna, en el orden de `columns`, ordenada como cada grupo (§5). */
+  cells: Array<{ status: BoardColumn; issues: BoardIssue[] }>;
+}
+
+/** Celdas de un carril. En «Por confirmar», lo cerrado más recientemente va primero. */
+function laneCells(
+  index: BoardIndex,
+  issues: readonly BoardIssue[],
+  columns: readonly BoardColumn[],
+  pending?: ReadonlySet<string>,
+): KanbanLane["cells"] {
+  return columns.map((column) => {
+    const inColumn = issues.filter((issue) => columnOf(issue, pending) === column);
+    return {
+      status: column,
+      issues:
+        column === CONFIRM_COLUMN
+          ? [...inColumn].sort((a, b) => (b.closedAt ?? b.updatedAt).localeCompare(a.closedAt ?? a.updatedAt))
+          : sortIssues(index, inColumn),
+    };
+  });
 }
 
 /**
  * Carriles × columnas. Los carriles salen de `groupIssues`, así que van en el
  * mismo orden que los grupos de la lista. Un carril sin tareas en las columnas
- * visibles no aparece.
+ * visibles no aparece. `pending` son las tareas de «Por confirmar».
  */
 export function kanbanLanes(
   index: BoardIndex,
   issues: readonly BoardIssue[],
   laneBy: LaneBy,
-  statuses: readonly IssueStatus[],
+  columns: readonly BoardColumn[],
+  pending?: ReadonlySet<string>,
 ): KanbanLane[] {
-  const visible = issues.filter((issue) => statuses.includes(issue.status));
+  const visible = issues.filter((issue) => columns.includes(columnOf(issue, pending)));
   // «Sin proyecto» y «Sin asignar» juntan empresas: solo llevan color si todas sus tareas son de una.
   const soleCompany = (lane: readonly BoardIssue[]) => {
     const companies = new Set(lane.map((issue) => issue.companyId));
@@ -869,11 +854,22 @@ export function kanbanLanes(
     label: group.label,
     companyId: group.key === NO_PROJECT || group.key === UNASSIGNED ? soleCompany(group.issues) : group.companyId,
     total: group.issues.length,
-    cells: statuses.map((status) => ({
-      status,
-      issues: sortIssues(index, group.issues.filter((issue) => issue.status === status)),
-    })),
+    cells: laneCells(index, group.issues, columns, pending),
   }));
+}
+
+/** Clave del único carril del Board sin agrupar. */
+export const FLAT_LANE = "all";
+
+/** Board sin agrupar: un solo carril con todas las tareas de las columnas visibles. */
+export function kanbanFlat(
+  index: BoardIndex,
+  issues: readonly BoardIssue[],
+  columns: readonly BoardColumn[],
+  pending?: ReadonlySet<string>,
+): KanbanLane[] {
+  const visible = issues.filter((issue) => columns.includes(columnOf(issue, pending)));
+  return [{ key: FLAT_LANE, label: "", companyId: null, total: visible.length, cells: laneCells(index, visible, columns, pending) }];
 }
 
 /**

@@ -6,12 +6,14 @@ import {
   type PluginSidebarProps,
 } from "@paperclipai/plugin-sdk/ui";
 import {
+  BACKLOG_STATUSES,
+  FLAT_LANE,
   NO_PROJECT,
   assigneeKey,
+  boardColumns,
   buildBoardIndex,
+  columnOf,
   filterIssues,
-  kanbanLanes,
-  kanbanStatuses,
   laneKeyOf,
   parseBoardQuery,
   serializeBoardQuery,
@@ -21,22 +23,24 @@ import {
   type GroupBy,
   type LaneBy,
 } from "../board.js";
+import { pendingConfirmation } from "../confirm.js";
 import { pedidoRows } from "../pedidos.js";
-import { PAGE_ROUTE, type BoardIssue, type IssueStatus } from "../shared.js";
+import { PAGE_ROUTE, isOpenStatus, type BoardIssue, type IssueStatus } from "../shared.js";
+import { BacklogView } from "./backlog.js";
 import { getSessionUserId } from "./bridge.js";
 import { Peek } from "./card.js";
 import { CreateProvider, MarksProvider, useCreateFlow, useMarks } from "./create.js";
 import { STATUS_LABELS, plural, useNow } from "./common.js";
 import { FilterBar } from "./filters.js";
-import { Header, KpiLine, Kpis } from "./header.js";
-import { KanbanBoard, KanbanSkeleton } from "./kanban.js";
-import { LaneBoard, badDropMessage, laneUiKey } from "./lanes.js";
+import { Header } from "./header.js";
+import { BoardSkeleton, LaneBoard, badDropMessage, boardLanes, laneUiKey } from "./lanes.js";
 import { ToastStack, useToasts } from "./layer.js";
 import { ListView } from "./list.js";
 import { EmptyPedidos, PedidosView } from "./pedidos.js";
 import { EmptyResults, LoadFailed, PartialErrorBanner, TocaBanner } from "./states.js";
 import { ensureStyles } from "./styles.js";
 import { useBoardData } from "./useBoardData.js";
+import { useConfirmations } from "./useConfirmations.js";
 import { useLiveRuns } from "./usePedidos.js";
 import { useSavedViews } from "./useSavedViews.js";
 import { ViewTabs } from "./views.js";
@@ -136,6 +140,7 @@ function useFillHeight() {
 }
 
 const EMPTY_INDEX: BoardIndex = buildBoardIndex([]);
+const NO_IDS: ReadonlySet<string> = new Set();
 
 /** Clave de la tarea en los grupos de la Lista, para desplegar el grupo donde cae una tarea nueva. */
 function listGroupKey(issue: BoardIssue, group: GroupBy): string {
@@ -161,10 +166,10 @@ function toggleIn(set: ReadonlySet<string>, key: string): Set<string> {
 }
 
 /**
- * Página del Board global (propuesta D de JST-9, con la Fase 2 de JST-21:
- * vistas guardadas y carriles) y sus tres vistas: Kanban, Lista y Pedidos. Todo
- * el estado de la vista vive en la URL, así que se puede guardar como marcador,
- * compartir o guardar como vista.
+ * Página del Board global (propuesta D de JST-9, la Fase 2 de JST-21 y el
+ * rediseño de JST-407) y sus cuatro vistas: Board, Backlog, Lista y Pedidos.
+ * Todo el estado de la vista vive en la URL, así que se puede guardar como
+ * marcador, compartir o guardar como vista.
  */
 export function BoardGlobalPage({ context }: PluginPageProps) {
   useLayoutEffect(() => ensureStyles(), []);
@@ -173,6 +178,7 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
   const data = useBoardData();
   // Se leen al abrir el board, en paralelo con las tareas (§3.10).
   const saved = useSavedViews(context.companyId);
+  const confirmations = useConfirmations(context.companyId);
   const { toasts, show: toast, dismiss } = useToasts();
   const now = useNow();
   const { ref: rootRef, height } = useFillHeight();
@@ -183,7 +189,9 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
     [navigation],
   );
   const setFilters = (filters: BoardFilters) => setQuery({ ...query, filters });
-  const lanes = query.view === "kanban" ? query.lanes : null;
+  const inBoard = query.view === "kanban";
+  const inBacklog = query.view === "backlog";
+  const lanes = inBoard ? query.lanes : null;
 
   // Tareas recién creadas (JST-333): marcadas y primeras en su grupo hasta que se actualiza el board.
   const { marks, set: setMark, clear: clearMark } = useMarks(data.loadedAt);
@@ -207,6 +215,24 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
     return extra.length > 0 ? [...base, ...extra] : base;
   }, [index, marks, query.filters, filterNow]);
 
+  // «Por confirmar» (JST-407): raíces cerradas que la persona todavía no confirma. Con filtro
+  // de estado no hay columna. `selfClosed`: las que cerró ella misma desde el board; se dan
+  // por confirmadas apenas se sueltan, antes de que responda el worker.
+  const [selfClosed, setSelfClosed] = useState<ReadonlySet<string>>(NO_IDS);
+  const withConfirm = confirmations.state !== null && query.filters.est.length === 0;
+  const pending = useMemo(() => {
+    if (!index || !withConfirm) return NO_IDS;
+    const ids = pendingConfirmation(index.issues, confirmations.state, now);
+    for (const id of selfClosed) ids.delete(id);
+    return ids;
+  }, [index, withConfirm, confirmations.state, now, selfClosed]);
+  const columns = useMemo(() => boardColumns(query.filters, query.showClosed, withConfirm), [query.filters, query.showClosed, withConfirm]);
+  // Lo que cabe en cada vista: las columnas del Board, o Backlog y Por hacer.
+  const boardIssues = useMemo(() => filtered.filter((issue) => columns.includes(columnOf(issue, pending))), [filtered, columns, pending]);
+  const backlogIssues = useMemo(() => filtered.filter((issue) => (BACKLOG_STATUSES as readonly IssueStatus[]).includes(issue.status)), [filtered]);
+  const backlogCount = useMemo(() => backlogIssues.filter((issue) => issue.status === "backlog").length, [backlogIssues]);
+  const closedCount = useMemo(() => filtered.filter((issue) => !isOpenStatus(issue.status) && !pending.has(issue.id)).length, [filtered, pending]);
+
   // Vista Pedidos: una fila por tarea raíz. Las corridas activas se piden solo con la vista abierta.
   const inPedidos = query.view === "pedidos";
   const liveRuns = useLiveRuns(data.index, inPedidos, data.loadedAt);
@@ -215,56 +241,45 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
     [inPedidos, index, query, liveRuns, filterNow],
   );
 
-  // Estado de la vista que no va en la URL: grupos plegados, «+N más», subtareas por tarjeta.
+  // Estado de la vista que no va en la URL: grupos plegados, «Ver N más» y árbol de la lista.
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [more, setMore] = useState<Readonly<Record<string, number>>>({});
-  const [cardToggled, setCardToggled] = useState<ReadonlySet<string>>(() => new Set());
-  const [kidsAll, setKidsAll] = useState<ReadonlySet<string>>(() => new Set());
   const [treeClosed, setTreeClosed] = useState<ReadonlySet<string>>(() => new Set());
   const onToggleGroup = useCallback((key: string) => setCollapsed((prev) => toggleIn(prev, key)), []);
   const onMore = useCallback((key: string, next: number) => setMore((prev) => ({ ...prev, [key]: next })), []);
-  const onToggleSubtasks = useCallback((id: string) => setCardToggled((prev) => toggleIn(prev, id)), []);
-  const onShowAllKids = useCallback((id: string) => setKidsAll((prev) => new Set(prev).add(id)), []);
   const onToggleTree = useCallback((id: string) => setTreeClosed((prev) => toggleIn(prev, id)), []);
-  const resetCards = useCallback(() => {
-    setCardToggled(new Set());
-    setKidsAll(new Set());
-  }, []);
 
-  // Carriles plegados y «Ver contadores»: en memoria, en este navegador (§3.10).
+  // Carriles plegados: en memoria, en este navegador (§3.10).
   const [closedLanes, setClosedLanes] = useState<ReadonlySet<string>>(() => new Set());
-  const [kpiOpen, setKpiOpen] = useState(false);
   const onToggleLane = useCallback((key: string) => setClosedLanes((prev) => toggleIn(prev, key)), []);
-  // Al cambiar `carr`, las tarjetas tocadas a mano vuelven a lo de ese modo (§4.1).
+  // Al cambiar `carr` se despliegan todos y vuelven las tarjetas por celda de ese modo (§4.1).
   const onLanes = (next: LaneBy | null) => {
     setClosedLanes(new Set());
     setMore({});
-    resetCards();
     setQuery({ ...query, lanes: next });
   };
   const onFoldLanes = (fold: boolean) => {
     if (!index || !lanes) return;
-    const keys = kanbanLanes(index, filtered, lanes, kanbanStatuses(query.filters, query.showClosed)).map((lane) => laneUiKey(lanes, lane.key));
+    const keys = boardLanes(index, filtered, lanes, columns, pending).map((lane) => laneUiKey(lanes, lane.key));
     setClosedLanes(fold ? new Set(keys) : new Set());
   };
-  // Abrir una vista (o «Todo el board», o «Descartar»): vuelve a 3 tarjetas por grupo.
+  // Abrir una vista (o «Todo el board», o «Descartar»): vuelve a las tarjetas por celda de siempre.
   const onApplyView = (next: BoardQuery) => {
     setMore({});
-    resetCards();
     setQuery(next);
   };
 
   // «+ Crear»: el compositor vive en la página y los puntos de entrada lo abren por contexto.
   const reveal = useCallback(
     (issue: BoardIssue) => {
-      const keys = [`${issue.status}:${issue.companyId}`, `l:${query.group}:${listGroupKey(issue, query.group)}`];
+      const keys = [`bk:${issue.companyId}`, `l:${query.group}:${listGroupKey(issue, query.group)}`];
       setCollapsed((prev) => (keys.some((key) => prev.has(key)) ? new Set([...prev].filter((key) => !keys.includes(key))) : prev));
-      if (lanes) {
-        const laneKey = laneUiKey(lanes, laneKeyOf(issue, lanes));
+      if (inBoard) {
+        const laneKey = laneUiKey(lanes, lanes ? laneKeyOf(issue, lanes) : FLAT_LANE);
         setClosedLanes((prev) => (prev.has(laneKey) ? new Set([...prev].filter((key) => key !== laneKey)) : prev));
       }
     },
-    [query.group, lanes],
+    [query.group, inBoard, lanes],
   );
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   useEffect(() => {
@@ -302,10 +317,55 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
   const onDragStart = useCallback((issue: BoardIssue) => setDragging(issue), []);
   const onDragEnd = useCallback(() => setDragging(null), []);
 
+  const idLabel = (issue: BoardIssue) => (
+    <b className="gb-mono" style={{ fontWeight: 500 }}>
+      {issue.identifier ?? "La tarea"}
+    </b>
+  );
+
+  // Confirmar: la tarea sale de «Por confirmar». Para Paperclip ya estaba cerrada, así que no cambia nada allá.
+  const { confirm: confirmIds, unconfirm: unconfirmIds } = confirmations;
+  const confirmIssues = useCallback(
+    async (issues: readonly BoardIssue[]) => {
+      if (issues.length === 0) return;
+      const ids = issues.map((issue) => issue.id);
+      try {
+        await confirmIds(ids);
+        toast({
+          content:
+            issues.length === 1 ? (
+              <>
+                {idLabel(issues[0]!)} confirmada · queda en {STATUS_LABELS[issues[0]!.status]}
+              </>
+            ) : (
+              `${issues.length} tareas confirmadas`
+            ),
+          action: {
+            label: "Deshacer",
+            run: () =>
+              void unconfirmIds(ids).catch((err: Error) => toast({ error: true, content: `No se pudo deshacer la confirmación: ${err.message}` })),
+          },
+        });
+      } catch (err) {
+        toast({ error: true, content: `No se pudo confirmar: ${(err as Error).message}` });
+      }
+    },
+    [confirmIds, unconfirmIds, toast],
+  );
+  const onConfirm = useCallback((issue: BoardIssue) => void confirmIssues([issue]), [confirmIssues]);
+
   const move = async (issue: BoardIssue, from: IssueStatus, to: IssueStatus, undo: boolean) => {
     const label = issue.identifier ?? "la tarea";
+    // Si la cierra la persona desde el board, no hace falta que después la confirme. Al
+    // deshacer una reapertura sí vuelve a «Por confirmar», como estaba.
+    const selfClose = !undo && !isOpenStatus(to) && !issue.parentId && confirmations.state !== null;
+    if (selfClose) setSelfClosed((prev) => new Set(prev).add(issue.id));
+    const settle = () => setSelfClosed((prev) => (prev.has(issue.id) ? new Set([...prev].filter((id) => id !== issue.id)) : prev));
     try {
       const status = await data.moveIssue(issue.id, from, to);
+      // Después del cambio de estado: la confirmación tiene que quedar con hora posterior al cierre.
+      if (selfClose && status === to) await confirmIds([issue.id]).catch(() => undefined);
+      if (selfClose) settle();
       toast({
         content: (
           <>
@@ -318,17 +378,34 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
         action: undo ? undefined : { label: "Deshacer", run: () => void move(issue, status, from, true) },
       });
     } catch (err) {
+      if (selfClose) settle();
       toast({ error: true, content: `No se pudo ${undo ? "deshacer el cambio de" : "mover"} ${label}: ${(err as Error).message}` });
     }
   };
   const onDrop = (status: IssueStatus) => {
     const issue = dragging;
     setDragging(null);
-    if (issue && issue.status !== status) void move(issue, issue.status, status, false);
+    if (!issue) return;
+    // Una tarjeta de «Por confirmar» soltada en la columna de su propio estado: se confirma.
+    if (issue.status === status) {
+      if (pending.has(issue.id)) void confirmIssues([issue]);
+      return;
+    }
+    void move(issue, issue.status, status, false);
+  };
+  const onDropConfirm = () => {
+    const issue = dragging;
+    setDragging(null);
+    if (issue && pending.has(issue.id)) void confirmIssues([issue]);
+  };
+  const onBacklogMove = (issue: BoardIssue, to: IssueStatus) => {
+    setDragging(null);
+    if (issue.status !== to) void move(issue, issue.status, to, false);
   };
 
   const refresh = async () => {
     void saved.reload(true);
+    void confirmations.reload();
     const result = await data.refresh();
     if (!result) return;
     const seconds = (result.elapsedMs / 1000).toLocaleString("es-CL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -336,6 +413,7 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
   };
 
   const peekIssue = peek && index ? index.byId.get(peek.issueId) : undefined;
+  const shown = inBoard ? boardIssues : inBacklog ? backlogIssues : filtered;
 
   return (
     <CreateProvider value={create}>
@@ -349,41 +427,21 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
         refreshing={data.refreshing}
         onRefresh={() => void refresh()}
         view={query.view}
+        backlogCount={index ? backlogCount : null}
         onView={(view) => setQuery({ ...query, view })}
       />
       {/* Desde el primer instante, también durante el esqueleto: la página no salta al llegar las vistas (§3.10). */}
       <ViewTabs index={index} query={query} now={now} saved={saved} onApply={onApplyView} toast={toast} />
-      {lanes && !kpiOpen ? (
-        <KpiLine index={index} loading={loading} filters={query.filters} onFilters={setFilters} onExpand={() => setKpiOpen(true)} />
-      ) : (
-        <Kpis
-          index={index}
-          loads={data.loads}
-          loading={loading}
-          filters={query.filters}
-          onFilters={setFilters}
-          onRetry={data.retry}
-          onFold={lanes ? () => setKpiOpen(false) : undefined}
-        />
-      )}
-      <FilterBar
-        index={index}
-        query={query}
-        disabled={loading || !index}
-        onQuery={setQuery}
-        onResetCards={resetCards}
-        onLanes={onLanes}
-        onFoldLanes={onFoldLanes}
-      />
+      <FilterBar index={index} query={query} disabled={loading || !index} onQuery={setQuery} onLanes={onLanes} onFoldLanes={onFoldLanes} />
       {index && data.failed.length > 0 ? (
         <PartialErrorBanner failed={data.failed} onRetry={() => data.failed.forEach((load) => void data.retry(load.company.id))} />
       ) : null}
       {index && query.filters.toca && index.tocaAvailable ? (
-        <TocaBanner index={index} issues={filtered} onShowAll={() => setFilters({ ...query.filters, toca: false })} />
+        <TocaBanner index={index} issues={shown} onShowAll={() => setFilters({ ...query.filters, toca: false })} />
       ) : null}
 
       {loading ? (
-        <KanbanSkeleton />
+        <BoardSkeleton />
       ) : !index ? (
         <LoadFailed message={data.listError} onRetry={() => void data.refresh()} />
       ) : inPedidos ? (
@@ -399,8 +457,14 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
             unfold={query.filters.q.trim().length > 0 || query.filters.est.length > 0}
           />
         )
-      ) : filtered.length === 0 ? (
-        <EmptyResults index={index} query={query} onFilters={setFilters} />
+      ) : shown.length === 0 ? (
+        <EmptyResults
+          index={index}
+          query={query}
+          onFilters={setFilters}
+          backlogCount={inBoard ? backlogCount : 0}
+          onBacklog={() => setQuery({ ...query, view: "backlog" })}
+        />
       ) : query.view === "lista" ? (
         <ListView
           index={index}
@@ -412,41 +476,42 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
           onToggleTree={onToggleTree}
           onMore={onMore}
         />
-      ) : lanes ? (
+      ) : inBacklog ? (
+        <BacklogView
+          index={index}
+          issues={backlogIssues}
+          now={now}
+          collapsed={collapsed}
+          more={more}
+          dragging={dragging}
+          onToggleGroup={onToggleGroup}
+          onMore={onMore}
+          onMove={onBacklogMove}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+        />
+      ) : (
         <LaneBoard
           index={index}
-          issues={filtered}
+          issues={boardIssues}
           query={query}
           laneBy={lanes}
-          ui={{ collapsed, more, cardToggled, kidsAll }}
+          columns={columns}
+          pending={pending}
+          closedCount={closedCount}
+          more={more}
           closedLanes={closedLanes}
           dragging={dragging}
           onToggleLane={onToggleLane}
           onMore={onMore}
-          onToggleSubtasks={onToggleSubtasks}
-          onShowAllKids={onShowAllKids}
           onShowClosed={() => setQuery({ ...query, showClosed: true })}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
           onDrop={onDrop}
+          onDropConfirm={onDropConfirm}
           onBadDrop={() => toast({ content: badDropMessage(lanes) })}
-          onPeek={onPeek}
-        />
-      ) : (
-        <KanbanBoard
-          index={index}
-          issues={filtered}
-          query={query}
-          ui={{ collapsed, more, cardToggled, kidsAll }}
-          draggingId={dragging?.id ?? null}
-          onToggleGroup={onToggleGroup}
-          onMore={onMore}
-          onToggleSubtasks={onToggleSubtasks}
-          onShowAllKids={onShowAllKids}
-          onShowClosed={() => setQuery({ ...query, showClosed: true })}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          onDrop={onDrop}
+          onConfirm={onConfirm}
+          onConfirmAll={(issues) => void confirmIssues(issues)}
           onPeek={onPeek}
         />
       )}

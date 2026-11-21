@@ -90,18 +90,6 @@ export function Popover({
   );
 }
 
-/** Tooltip que sigue al mouse (segmentos de las barras de «Abiertas por empresa»). */
-export function FollowTip({ tip }: { tip: { text: string; x: number; y: number } | null }) {
-  if (!tip) return null;
-  return (
-    <Layer>
-      <div className="gb-tip" style={{ left: tip.x + 12, top: tip.y + 14 }}>
-        {tip.text}
-      </div>
-    </Layer>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Toasts (§3.12): abajo al centro, 5 s, con una acción opcional
 // ---------------------------------------------------------------------------

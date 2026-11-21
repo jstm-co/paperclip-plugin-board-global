@@ -6,7 +6,7 @@
 
 A [Paperclip](https://github.com/paperclipai/paperclip) plugin that brings every company in an instance together on two pages:
 
-- **Board global** (Global Board): the issues of every company and every project in one view, as a kanban, a list or by request, with filters, saved views and swimlanes.
+- **Board global** (Global Board): the issues of every company and every project in one view, as a board, a backlog, a list or by request, with filters, saved views and swimlanes.
 - **Dashboard global** (Global Dashboard): each company's Dashboard side by side, with a per-company comparison and the activity of all of them merged by date.
 
 **Board global** has a button in the top bar of every page, and each page links to the other next to its title. In Paperclip's Classic workspace both pages also show up in the sidebar; the Coordinator workspace, which is the default, does not render plugin sidebar links. **The interface is in Spanish**; this README quotes the on-screen labels in Spanish, with a translation the first time they appear.
@@ -17,10 +17,14 @@ A [Paperclip](https://github.com/paperclipai/paperclip) plugin that brings every
 
 ## Global Board
 
-- **Counters** that filter with one click: «Te toca responder» (waiting for your answer), «Bloqueadas» (blocked), «Críticas y altas» (critical and high) and «En revisión» (in review). They only follow the company filter.
-- **Open issues by company:** one bar per company, split by status. Each row is also the company filter.
-- **Kanban:** one column per open status. Inside each column, one group per company with 3 cards and «+N más» (+N more). Done and cancelled issues show up with the «Hechas y canceladas» (done and cancelled) rail.
-- **Card:** company (prefix and color), ID, title, project (or parent issue), assignee and priority. Parent issues show their open sub-issues and progress (2/8).
+- **Board:** one column per status in progress, in neutral gray: «Por hacer» (to do), «En curso» (in progress), «En revisión» (in review) and «Bloqueada» (blocked). It opens grouped by company: each company is a swimlane with its header on top (name, issue count and how many are waiting for you) and 2 cards per cell, with «Ver N más» (show N more). Done and cancelled issues show up with the «Hechas y canceladas» (done and cancelled) rail. A status filter replaces the columns with the chosen statuses.
+- **Backlog:** its own view, so it does not crowd the board. On top, what is already in «Por hacer»; below, the backlog of each company as a flat list. Drag a row from one side to the other, or use the button on the row, to move it between Backlog and «Por hacer».
+- **«Por confirmar»** (to confirm): a board column for the root issues that someone closed (done or cancelled) and you have not confirmed yet, so you can tell what was finished from what you already checked.
+  - For Paperclip those issues are closed: the plugin only remembers which closures you confirmed, and adds no status.
+  - «Confirmar» (confirm) on the card, or dragging it to «Hechas y canceladas», confirms it. «Todas» (all) confirms the whole column. Dragging it to an open column reopens it. Every one of these offers «Deshacer» (undo).
+  - If the issue is reopened and closed again, it comes back to the column. Closing an issue yourself from the board does not ask for confirmation.
+  - The column starts with the closures of the last 7 days, and a closure nobody confirmed leaves it after 30 days. Sub-issues never show up there. With a status filter the column is not shown.
+- **Card:** the title first, then the «Te toca» line, the parent issue (or the project) and a footer with the company color next to the ID, the priority when it is critical or high, the sub-issue progress (2/8) and the assignee. A card that is waiting for you has a tinted background.
 - **«Te toca»** (your turn): marks the issues waiting for your answer and the ones that depend on them («Espera tu respuesta en ACM-9», waiting for your answer on ACM-9). The data comes from each company's Inbox.
 - **List** grouped by company, status, project, assignee or priority. When grouped by company or project, sub-issues are nested under their parent.
 - **Pedidos** (requests): one row per request (an issue with no parent) that sums up everything created underneath it, so you can see at a glance where each thing you asked for stands.
@@ -30,10 +34,10 @@ A [Paperclip](https://github.com/paperclipai/paperclip) plugin that brings every
   - **Expanding** a row shows the full sub-issue tree with status, assignee and which one is running.
   - **Filters** look at the root issue, with three differences: search also finds a request by the ID or title of a sub-issue (and says which one), «Te toca» keeps the requests where some issue is waiting for your answer, and «Actualizada» (updated) counts the last movement of any issue of the request.
   - **«Ocultar títulos que empiezan con…»** (hide titles starting with) hides the requests whose title starts with a text, for example the notices an automation creates. It takes several texts separated by commas and is saved with the view. «Ver cerrados» (show closed) adds the done and cancelled requests.
-- **Filters:** search, project, status, assignee and priority. Company, label and last-updated date are under «Más filtros» (more filters). Each menu shows how many issues match each option.
+- **Filters**, all in one row: search, one button per company, the quick filters «Te toca» and «Críticas y altas» (critical and high) with how many issues each would leave in the current view, and the «Filtros» (filters) menu with project, status, assignee, priority, label and last-updated date. Each menu shows how many issues match each option.
   - **Search** matches ID, title or company, ignoring accents and case. An issue shows up if the text is in its ID or title, or if its company name, a word of that name, or its prefix starts with the text. The company part needs at least 3 characters and does not search inside the name: `corp` does not bring up all of «Betacorp».
 - **Drag** a card to another column to change its status with `PATCH /api/issues/:id`, just like the built-in kanban. The toast offers «Deshacer» (undo). If the API rejects the change, the card goes back.
-- **Create issues:** «+ Crear» (create) at the bottom of the Backlog, Por hacer and En curso columns opens a composer in place: type a title and press Enter. The same entry point exists in each swimlane cell, as a «Nueva tarea en…» row under each List group, and as the «Crear tarea» button in the header. Company, project, assignee and priority come from the column, swimlane, group or the active filter; with no company to start from you choose one. Assigning an agent wakes it up (except in Backlog), and the composer says so; En curso needs an assignee, so it starts as «Yo» (you). It uses `POST /api/companies/:id/issues` with your session, so it needs no new permission. A title already open in the last 48 hours is not created twice (the server returns the existing issue and the board marks it).
+- **Create issues:** «+ Crear» (create) in each cell of the Por hacer and En curso columns opens a composer in place: type a title and press Enter. The same entry point exists as a «Nueva tarea en…» row under each List group and each Backlog group, and as the «Crear tarea» button in the header. Company, project, assignee and priority come from the swimlane, group or the active filter; with no company to start from you choose one. Assigning an agent wakes it up (except in Backlog), and the composer says so; En curso needs an assignee, so it starts as «Yo» (you). It uses `POST /api/companies/:id/issues` with your session, so it needs no new permission. A title already open in the last 48 hours is not created twice (the server returns the existing issue and the board marks it).
 - **Preview** after hovering a card for 450 ms: details, «Te toca» and the issue tree.
 - **Per-company loading:** if a company does not respond, the rest of the board keeps working and that company can be retried on its own.
 - **Company colors:** if the company has a brand color in Paperclip («Brand color» in its settings), that one is used. Otherwise the first 4 companies in alphabetical order of the name get one of 4 fixed colors, and from the fifth on they are gray. The prefix always goes next to the color.
@@ -41,16 +45,15 @@ A [Paperclip](https://github.com/paperclipai/paperclip) plugin that brings every
 ### Saved views and swimlanes
 
 - **View tabs** under the header: «Todo el board» (whole board), one tab per saved view (with its count) and «+ Guardar vista» (save view).
-  - **Save:** the popover suggests a name based on the filters («Bloqueadas de todas las empresas», «Lo mío · últimos 7 días») and shows what it saves and how many issues (or requests) it shows. A view saves everything in the URL: filters, Kanban, List or Pedidos, grouping, swimlanes, collapsed sub-issues, closed columns and hidden titles.
+  - **Save:** the popover suggests a name based on the filters («Bloqueadas de todas las empresas», «Lo mío · últimos 7 días») and shows what it saves and how many issues (or requests) it shows. A view saves everything in the URL: filters, Board, Backlog, List or Pedidos, grouping, swimlanes, closed columns and hidden titles.
   - **Open:** click the tab. **Rename:** double-click, F2 or «⋯ › Renombrar». **Delete:** «⋯ › Borrar vista…», with confirmation.
   - **Unsaved changes:** if you change a filter while a view is open, the tab gets a dot and «Descartar» (discard) and «Actualizar vista» (update view) appear.
   - Tabs that do not fit go into «Más · N» (more). The active one is always visible.
   - **Stored on the server** (plugin state with instance scope): everyone using the instance sees them and can change them, from any company and browser.
-- **Swimlanes** (Kanban only): «Carriles» (swimlanes) in the filter bar groups them by company, project or assignee. Columns are still the statuses.
-  - Each swimlane shows 2 cards per cell and «+N más», and collapses to a row of counts by clicking its label. «Carriles › Plegar todos» collapses all of them.
-  - With swimlanes, the sub-issues of each card start collapsed and expand one by one by clicking «Subtareas» (sub-issues).
+- **Swimlanes** (Board only): «Agrupar» (group by) in the filter bar groups the board by company (the default), project or assignee, or shows it ungrouped. Columns are still the statuses.
+  - Each swimlane shows 2 cards per cell and «Ver N más», and collapses to its header by clicking it. «Agrupar › Plegar todos los carriles» collapses all of them.
   - Dragging only changes the status, and only within the same swimlane: an issue does not move to another company, project or assignee.
-- **«Actualizada» filter** (updated) under «Más filtros»: «En los últimos 7 días» (in the last 7 days) is counted from now every time the board renders, so a view like «Lo mío · últimos 7 días» never goes stale. The counters do not apply it.
+- **«Actualizada» filter** (updated) in the «Filtros» menu: «En los últimos 7 días» (in the last 7 days) is counted from now every time the board renders, so a view like «Lo mío · últimos 7 días» never goes stale.
 
 ### State in the URL
 
@@ -58,7 +61,7 @@ The whole view state lives in the URL, so it can be bookmarked or shared. Defaul
 
 | Parameter | Values |
 |---|---|
-| `v` | `kanban` (default) · `lista` (list) · `pedidos` (requests) |
+| `v` | `kanban` (the Board, default) · `backlog` · `lista` (list) · `pedidos` (requests) |
 | `q` | text (ID, title or company) |
 | `emp` | company prefixes: `ACM,GLX` |
 | `prj` | project ids; `none` = no project |
@@ -69,8 +72,8 @@ The whole view state lives in the URL, so it can be bookmarked or shared. Defaul
 | `toca=1` | only what is waiting for your answer |
 | `act=7d` | updated in the last 7 days, counted from now |
 | `grp` | list grouping: `empresa` (company, default) · `estado` (status) · `proyecto` (project) · `responsable` (assignee) · `prioridad` (priority) |
-| `carr` | kanban swimlanes: `empresa` · `proyecto` · `responsable` (no parameter = no swimlanes) |
-| `sub=0` | sub-issues collapsed on every card (without swimlanes; with swimlanes they always start collapsed) |
+| `carr` | board swimlanes: `empresa` (default) · `proyecto` · `responsable` · `no` (ungrouped) |
+| `sub=0` | no longer changes anything: cards do not expand sub-issues. It is still read, so older links and saved views keep working |
 | `cerr=1` | Done and Cancelled columns visible; in Pedidos, the closed requests |
 | `ocu` | Pedidos only: hides the requests whose title starts with any of these texts: `Aviso%20autom%C3%A1tico,Recordatorio` |
 
@@ -183,17 +186,18 @@ npx paperclipai plugin uninstall jstm.board-global --force    # deletes everythi
 |---|---|
 | `companies.read` | List the companies in the instance. |
 | `issues.read` | Read each company's issues (the worker returns only the fields the board uses). |
-| `plugin.state.read`, `plugin.state.write` | Read and store saved views. This is the only thing the plugin writes. |
+| `plugin.state.read`, `plugin.state.write` | Read and store saved views and the «Por confirmar» confirmations. This is the only thing the plugin writes. |
 | `ui.page.register`, `ui.sidebar.register` | The two pages and their sidebar links. |
 | `ui.action.register` | The «Board global» button in the top bar. |
 
 - The plugin does not call any external service: everything goes to your own Paperclip instance's API.
 - Projects, agents, the Inbox («Te toca»), the Dashboard, the status change when dragging, creating issues and, in the Pedidos view, the active runs and the last comment of each request use the built-in API with the session of the user viewing the page. That way the same core rules and permissions apply.
-- Saved views belong to the whole instance: there are no per-user views.
+- Saved views and confirmations belong to the whole instance: they are not per user.
 
 ## Known limitations
 
-- **«Te toca»** needs a user session in the browser. If the Inbox cannot be read, the counter shows «—» and the filter is not applied.
+- **«Te toca»** needs a user session in the browser. If the Inbox cannot be read, the quick filter is disabled.
+- **«Por confirmar»** does not know who closed an issue: one you closed yourself outside the board, in Paperclip's own pages, also shows up there.
 - **Assigned people:** the SDK does not expose their names. `local-board` shows up as «Board» and other people as «Persona» (person) with a short id.
 - **Links to other companies:** opening an issue from another company reloads the app, because the host's navigation prepends the active company.
 - **Pagination:** each company is requested in full (in Paperclip `2026.824.1`, `ctx.issues.list` with `offset` returns nothing). With about 400 issues per company it takes about 65 ms in the worker.
@@ -212,7 +216,7 @@ npm test            # tests for the board, dashboard and worker logic
 npm run typecheck
 ```
 
-The tests cover what does not depend on React: URL state, filters and counts, date filter, sorting, counters, «Te toca», sub-issue tree, grouping, swimlanes, company colors, saved views, the Pedidos view (subtree, who has the ball, search by sub-issue, hidden titles and latest news) and the fields the worker returns. On the Dashboard: totals, budget %, 14-day charts, comparison sorting, company filter, formats and activity texts.
+The tests cover what does not depend on React: URL state, filters and counts, date filter, sorting, quick filters, «Te toca», sub-issue tree, grouping, swimlanes, board columns, the Backlog view, «Por confirmar», company colors, saved views, the Pedidos view (subtree, who has the ball, search by sub-issue, hidden titles and latest news) and the fields the worker returns. On the Dashboard: totals, budget %, 14-day charts, comparison sorting, company filter, formats and activity texts.
 
 Paperclip serves the interface from `dist/ui/` in the installed folder on every page load: a build in that folder changes what the user sees even if you do not run `upgrade`. If you develop on an instance you use every day, install from a separate copy.
 
@@ -221,8 +225,9 @@ Paperclip serves the interface from `dist/ui/` in the installed folder on every 
 | Piece | File | What it does |
 |---|---|---|
 | Manifest | `src/manifest.ts` | Two pages (`board-global` and `dashboard-global`), their sidebar links, the top bar button and the permissions. |
-| Worker | `src/worker.ts` | `company-issues` data: the issues of **one** company with only the board's fields. `saved-views` data and `view-create`, `view-rename`, `view-update` and `view-delete` actions for saved views, one operation at a time. |
-| Board logic | `src/board.ts` | URL, multi-company index, colors, filters, sorting, counters, «Te toca», tree, grouping and swimlanes. No React. |
+| Worker | `src/worker.ts` | `company-issues` data: the issues of **one** company with only the board's fields. `saved-views` data and `view-create`, `view-rename`, `view-update` and `view-delete` actions for saved views, one operation at a time. `confirmations` data and `confirm-add` and `confirm-remove` actions for «Por confirmar». |
+| Board logic | `src/board.ts` | URL, multi-company index, colors, filters, sorting, «Te toca», tree, grouping, swimlanes and board columns. No React. |
+| «Por confirmar» | `src/confirm.ts`, `src/ui/useConfirmations.ts` | Which closed root issues wait for confirmation, and the confirm and undo operations. |
 | Pedidos logic | `src/pedidos.ts` | Subtree of each root issue, full progress, who has the ball, which requests each filter shows and the first line of a comment. No React. |
 | Saved views | `src/views.ts`, `src/ui/views.tsx`, `src/ui/useSavedViews.ts` | Names, suggested name, tab state, worker operations and optimistic writes. |
 | UI data | `src/ui/useBoardData.ts`, `src/ui/useDashboardData.ts`, `src/ui/usePedidos.ts`, `src/ui/bridge.ts` | Parallel loading per company, retry and status change. In Pedidos, active runs and last comment. |
