@@ -2,8 +2,18 @@ import { describe, expect, it } from "vitest";
 import type { Company, Issue } from "@paperclipai/plugin-sdk";
 import { createTestHarness } from "@paperclipai/plugin-sdk/testing";
 import manifest from "../src/manifest.js";
-import plugin from "../src/worker.js";
-import { DASHBOARD_ROUTE, DATA_COMPANY_ISSUES, DATA_SAVED_VIEWS, PAGE_ROUTE, VIEW_ACTIONS, type CompanyIssues } from "../src/shared.js";
+import plugin, { toBoardIssue } from "../src/worker.js";
+import { CONFIRM_STATE_KEY, type Confirmations } from "../src/confirm.js";
+import {
+  CONFIRM_ACTIONS,
+  DASHBOARD_ROUTE,
+  DATA_COMPANY_ISSUES,
+  DATA_CONFIRMATIONS,
+  DATA_SAVED_VIEWS,
+  PAGE_ROUTE,
+  VIEW_ACTIONS,
+  type CompanyIssues,
+} from "../src/shared.js";
 import { VIEWS_STATE_KEY, type SavedView, type ViewOpResult } from "../src/views.js";
 
 function company(id: string, name: string, issuePrefix: string): Company {
@@ -96,8 +106,8 @@ describe("vistas guardadas en el servidor", () => {
     expect(fromJst.views.map((view) => view.id)).toEqual(["v1"]);
 
     await harness.performAction(VIEW_ACTIONS.rename, { companyId: "c-jst", id: "v1", name: "Bloqueadas" });
-    await harness.performAction(VIEW_ACTIONS.update, { companyId: "c-jst", id: "v1", search: "?est=blocked&carr=empresa" });
-    expect(harness.getState(SCOPE)).toMatchObject({ version: 1, views: [{ id: "v1", name: "Bloqueadas", search: "?est=blocked&carr=empresa" }] });
+    await harness.performAction(VIEW_ACTIONS.update, { companyId: "c-jst", id: "v1", search: "?est=blocked&carr=responsable" });
+    expect(harness.getState(SCOPE)).toMatchObject({ version: 1, views: [{ id: "v1", name: "Bloqueadas", search: "?est=blocked&carr=responsable" }] });
 
     const deleted = await harness.performAction<ViewOpResult>(VIEW_ACTIONS.delete, { companyId: "c-jst", id: "v1" });
     expect(deleted).toEqual({ ok: true, views: [] });
@@ -148,6 +158,43 @@ describe("vistas guardadas en el servidor", () => {
   });
 });
 
+describe("«Por confirmar» en el servidor", () => {
+  const SCOPE = { scopeKind: "instance", stateKey: CONFIRM_STATE_KEY } as const;
+
+  it("la primera lectura fija desde cuándo se piden confirmaciones y lo guarda", async () => {
+    const harness = await setup();
+    const first = await harness.getData<Confirmations>(DATA_CONFIRMATIONS, { companyId: "c-bet" });
+    expect(first.confirmed).toEqual({});
+    // Una semana hacia atrás: la columna no arranca con todo el historial ni vacía.
+    const age = Date.now() - Date.parse(first.since);
+    expect(age).toBeGreaterThan(6.9 * 24 * 3600 * 1000);
+    expect(age).toBeLessThan(7.1 * 24 * 3600 * 1000);
+    expect(harness.getState(SCOPE)).toMatchObject({ since: first.since });
+    // No depende de la empresa con que se invoque al worker, ni cambia al volver a leer.
+    const again = await harness.getData<Confirmations>(DATA_CONFIRMATIONS, { companyId: "c-jst" });
+    expect(again.since).toBe(first.since);
+  });
+
+  it("confirmar y deshacer: una acción cada una, guardada en ctx.state de la instancia", async () => {
+    const harness = await setup();
+    const confirmed = await harness.performAction<Confirmations>(CONFIRM_ACTIONS.confirm, { companyId: "c-bet", ids: ["bet-1", "jst-1", "bet-1"] });
+    expect(Object.keys(confirmed.confirmed).sort()).toEqual(["bet-1", "jst-1"]);
+    expect(harness.getState(SCOPE)).toMatchObject({ confirmed: { "bet-1": confirmed.confirmed["bet-1"] } });
+
+    const undone = await harness.performAction<Confirmations>(CONFIRM_ACTIONS.unconfirm, { companyId: "c-jst", ids: ["bet-1"] });
+    expect(Object.keys(undone.confirmed)).toEqual(["jst-1"]);
+    expect(undone.since).toBe(confirmed.since);
+    const read = await harness.getData<Confirmations>(DATA_CONFIRMATIONS, { companyId: "c-bet" });
+    expect(read).toEqual(undone);
+  });
+
+  it("rechaza una llamada sin la lista de tareas", async () => {
+    const harness = await setup();
+    await expect(harness.performAction(CONFIRM_ACTIONS.confirm, { companyId: "c-bet" })).rejects.toThrow(/ids/);
+    await expect(harness.performAction(CONFIRM_ACTIONS.confirm, { companyId: "c-bet", ids: ["ok", 7] })).rejects.toThrow(/ids/);
+  });
+});
+
 describe("company-issues", () => {
   it("devuelve las tareas de la empresa autorizada", async () => {
     const harness = await setup();
@@ -177,7 +224,21 @@ describe("company-issues", () => {
       blockerIds: [],
       createdAt: "2026-09-30T09:00:00.000Z",
       updatedAt: "2026-10-01T12:00:00.000Z",
+      closedAt: null,
     });
+  });
+
+  it("de una tarea cerrada manda cuándo se cerró: la base de «Por confirmar»", () => {
+    const base = { id: "x", companyId: "c", title: "t", priority: "medium", createdAt: new Date("2026-10-01T00:00:00Z"), updatedAt: new Date("2026-10-09T00:00:00Z") };
+    const done = toBoardIssue({ ...base, status: "done", completedAt: new Date("2026-10-05T10:00:00Z"), cancelledAt: null } as unknown as Issue);
+    expect(done.closedAt).toBe("2026-10-05T10:00:00.000Z");
+    const cancelled = toBoardIssue({ ...base, status: "cancelled", completedAt: null, cancelledAt: new Date("2026-10-06T10:00:00Z") } as unknown as Issue);
+    expect(cancelled.closedAt).toBe("2026-10-06T10:00:00.000Z");
+    // Reabierta: la fecha vieja de cierre ya no cuenta.
+    const reopened = toBoardIssue({ ...base, status: "in_progress", completedAt: new Date("2026-10-05T10:00:00Z") } as unknown as Issue);
+    expect(reopened.closedAt).toBeNull();
+    // Cerrada sin fecha (datos viejos): `null`, y el board usa la última actualización.
+    expect(toBoardIssue({ ...base, status: "done" } as unknown as Issue).closedAt).toBeNull();
   });
 
   it("incluye la tarea padre y el bloqueador (árbol y «Espera tu respuesta en…»)", async () => {

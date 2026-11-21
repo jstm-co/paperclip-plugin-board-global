@@ -1,11 +1,12 @@
-// Barra de filtros (§3.4): búsqueda, Proyecto · Estado · Responsable ·
-// Prioridad, «Más filtros» (Empresa, Etiqueta y Actualizada), chips y menús con
-// conteo facetado. En Kanban, «Carriles» (Fase 2, JST-21 §4.1); en Pedidos,
-// «Ocultar títulos» y «Ver cerrados». Todo el estado vive en la URL.
+// Barra de filtros (JST-407, sobre §3.4): una sola fila con búsqueda, empresas,
+// los filtros rápidos «Te toca» y «Críticas y altas», y el menú «Filtros»
+// (Proyecto, Estado, Responsable, Prioridad, Etiqueta y Actualizada) con conteo
+// facetado. A la derecha, lo propio de cada vista: «Agrupar» en el Board y la
+// Lista; «Ocultar títulos» y «Ver cerrados» en Pedidos. Todo vive en la URL.
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
-  FILTER_DIMS,
   GROUP_BY_OPTIONS,
+  HOT_PRIORITIES,
   LANE_OPTIONS,
   NO_PROJECT,
   UNASSIGNED,
@@ -15,9 +16,10 @@ import {
   dateCounts,
   emptyFilters,
   facetCounts,
-  hasChipFilters,
+  isHotFilter,
   normalizeText,
   toggleValue,
+  visibleIssues,
   type BoardFilters,
   type BoardIndex,
   type BoardQuery,
@@ -26,7 +28,7 @@ import {
   type LaneBy,
 } from "../board.js";
 import { ISSUE_PRIORITIES, ISSUE_STATUSES, type IssuePriority, type IssueStatus } from "../shared.js";
-import { Avatar, CompanyTag, PRIORITY_LABELS, PriorityIcon, STATUS_LABELS, StatusIcon, cx } from "./common.js";
+import { Avatar, CompanyTag, PRIORITY_LABELS, PriorityIcon, STATUS_LABELS, StatusIcon, companyClass, companyStyle, cx } from "./common.js";
 import { Icon, type IconName } from "./icons.js";
 import { Popover } from "./layer.js";
 
@@ -47,14 +49,14 @@ export const GROUP_META: Record<GroupBy, { label: string; icon: IconName }> = {
   prioridad: { label: "Prioridad", icon: "signal" },
 };
 
-/** Carriles del kanban: etiqueta, icono, plural (esquina de la grilla) y qué no cambia al arrastrar. */
+/** Carriles del Board: etiqueta, icono, plural y qué no cambia al arrastrar. */
 export const LANE_META: Record<LaneBy, { label: string; icon: IconName; plural: string; what: string }> = {
   empresa: { label: "Empresa", icon: "building", plural: "empresas", what: "la empresa" },
   proyecto: { label: "Proyecto", icon: "folder", plural: "proyectos", what: "el proyecto" },
   responsable: { label: "Responsable", icon: "user", plural: "responsables", what: "el responsable" },
 };
 
-/** Filtro de fecha (§5 de JST-21): vive en «Más filtros» (Ley de Hick). */
+/** Filtro de fecha (§5 de JST-21). */
 const DATE_META = { label: "Actualizada", icon: "clock" as IconName };
 
 interface DimOption {
@@ -292,8 +294,11 @@ function DateMenuBody({
 
 type MoreSub = FilterDim | "act" | null;
 
+/** Lo que agrupa el menú «Filtros». La empresa tiene sus botones en la barra. */
+const MENU_DIMS = ["prj", "est", "resp", "pri", "eti"] as const satisfies readonly FilterDim[];
+
 /**
- * «Más filtros»: menú de dos niveles, Filtrar por → Empresa, Etiqueta o Actualizada → valores.
+ * «Filtros»: menú de dos niveles, Filtrar por → dimensión → valores.
  * El nivel abierto (`dim`) vive en la barra, porque el ancho del popover depende de él.
  */
 function MoreMenuBody({
@@ -314,7 +319,7 @@ function MoreMenuBody({
   if (dim === "act") return <DateMenuBody index={index} filters={filters} onFilters={onFilters} onClose={onClose} onBack={() => setDim(null)} />;
   if (dim) return <DimMenuBody index={index} filters={filters} dim={dim} onFilters={onFilters} onBack={() => setDim(null)} />;
   const entries = [
-    ...(["emp", "eti"] as const).map((key) => ({ key, ...DIM_META[key], count: filters[key].length })),
+    ...MENU_DIMS.map((key) => ({ key, ...DIM_META[key], count: filters[key].length })),
     { key: "act" as const, ...DATE_META, count: filters.act ? 1 : 0 },
   ];
   return (
@@ -341,10 +346,10 @@ type MenuState =
   | { kind: "group"; anchor: HTMLElement }
   | { kind: "lanes"; anchor: HTMLElement };
 
-/** «Actualizada» mide 280 también como segundo nivel de «Más filtros» (§5). */
+/** «Actualizada» mide 280 también como segundo nivel de «Filtros» (§5). */
 function menuWidth(menu: MenuState): number {
   if (menu.kind === "group") return 220;
-  if (menu.kind === "more") return menu.sub === "act" ? 280 : 260;
+  if (menu.kind === "more") return menu.sub === "act" || menu.sub === "prj" || menu.sub === "resp" ? 280 : 260;
   if (menu.kind === "act" || menu.kind === "lanes" || menu.dim === "prj" || menu.dim === "resp") return 280;
   return 240;
 }
@@ -400,7 +405,6 @@ export function FilterBar({
   query,
   disabled,
   onQuery,
-  onResetCards,
   onLanes,
   onFoldLanes,
 }: {
@@ -408,9 +412,7 @@ export function FilterBar({
   query: BoardQuery;
   disabled: boolean;
   onQuery: (query: BoardQuery) => void;
-  /** «Plegar/Desplegar subtareas» borra los cambios hechos tarjeta por tarjeta. */
-  onResetCards: () => void;
-  /** Cambiar los carriles despliega todos y vuelve a 2 tarjetas por celda. */
+  /** Cambiar la agrupación del Board despliega todos los carriles y vuelve a 2 tarjetas por celda. */
   onLanes: (lanes: LaneBy | null) => void;
   onFoldLanes: (fold: boolean) => void;
 }) {
@@ -445,11 +447,20 @@ export function FilterBar({
   const toggleMenu = (next: MenuState) =>
     setMenu((current) => (current && current.anchor === next.anchor ? null : next));
 
-  const moreCount = (filters.emp.length > 0 ? 1 : 0) + (filters.eti.length > 0 ? 1 : 0) + (filters.act ? 1 : 0);
-  const lanes = query.view === "kanban" ? query.lanes : null;
-  // Con carriles, «Ocultar cerradas» queda solo con su icono y «Plegar subtareas»
-  // no aparece: las subtareas empiezan plegadas en cada tarjeta (§4.1, rev 2).
-  const iconOnly = (label: string) => (lanes ? { title: label, "aria-label": label } : {});
+  // Filtros rápidos: cuántas tareas quedarían en esta vista con cada uno encendido.
+  const { view, showClosed } = query;
+  const quick = useMemo(() => {
+    if (!index || view === "pedidos") return null;
+    const count = (next: BoardFilters) => visibleIssues(index, { view, filters: next, showClosed }).length;
+    return { toca: count({ ...filters, toca: true }), crit: count({ ...filters, pri: [...HOT_PRIORITIES] }) };
+  }, [index, view, showClosed, filters]);
+  const tocaOff = index !== null && !index.tocaAvailable;
+  const critOn = isHotFilter(filters);
+
+  // «Críticas y altas» ya se ve encendido en su botón: no repite el chip de Prioridad ni suma en «Filtros».
+  const chipDims = MENU_DIMS.filter((dim) => filters[dim].length > 0 && !(dim === "pri" && critOn));
+  const menuCount = chipDims.length + (filters.act ? 1 : 0);
+  const lanes = view === "kanban" ? query.lanes : null;
 
   return (
     <>
@@ -458,36 +469,63 @@ export function FilterBar({
           <Icon name="search" size={14} />
           <input value={draft} placeholder="Buscar…" aria-label="Buscar por ID, título o empresa" onChange={(e) => onSearch(e.target.value)} />
         </label>
-        {(["prj", "est", "resp", "pri"] as const).map((dim) => {
-          const n = filters[dim].length;
-          return (
-            <button
-              key={dim}
-              type="button"
-              className={cx("gb-btn", n > 0 && "is-active")}
-              aria-haspopup="menu"
-              aria-expanded={menu?.kind === "dim" && menu.dim === dim}
-              onClick={(event) => toggleMenu({ kind: "dim", dim, anchor: event.currentTarget })}
-            >
-              <Icon name={DIM_META[dim].icon} size={14} />
-              {DIM_META[dim].label}
-              {n > 0 ? <span className="gb-v">· {n}</span> : null}
-              <Icon name="chevron-down" size={14} />
-            </button>
-          );
-        })}
+        {index && index.companies.length > 1 ? (
+          <div className="gb-cotogs" role="group" aria-label="Empresas">
+            {index.companies.map((company) => {
+              const on = filters.emp.includes(company.prefix);
+              return (
+                <button
+                  key={company.id}
+                  type="button"
+                  className={cx("gb-cotog", companyClass(company), on ? "is-on" : filters.emp.length > 0 && "is-dim")}
+                  style={companyStyle(company)}
+                  aria-pressed={on}
+                  title={`${on ? "Quitar filtro" : "Ver solo"}: ${company.name}`}
+                  onClick={() => setFilters(toggleValue(filters, "emp", company.prefix))}
+                >
+                  {company.prefix}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
         <button
           type="button"
-          className="gb-btn is-ghost"
+          className={cx("gb-btn", "gb-quick", filters.toca && !tocaOff && "is-on")}
+          aria-pressed={filters.toca && !tocaOff}
+          disabled={tocaOff}
+          title={tocaOff ? "No disponible en esta instancia" : "Solo las tareas donde te toca responder"}
+          onClick={() => setFilters({ ...filters, toca: !filters.toca })}
+        >
+          <Icon name="reply" size={14} />
+          Te toca
+          {quick && !tocaOff ? <b className="gb-tnum">{quick.toca}</b> : null}
+        </button>
+        <button
+          type="button"
+          className={cx("gb-btn", "gb-quick", critOn && "is-on")}
+          aria-pressed={critOn}
+          title="Solo las de prioridad crítica o alta"
+          onClick={() => setFilters({ ...filters, pri: critOn ? [] : [...HOT_PRIORITIES] })}
+        >
+          <PriorityIcon priority="high" />
+          Críticas y altas
+          {quick ? <b className="gb-tnum">{quick.crit}</b> : null}
+        </button>
+        <button
+          type="button"
+          className={cx("gb-btn", menuCount > 0 ? "is-active" : "is-ghost")}
           aria-haspopup="menu"
+          aria-expanded={menu?.kind === "more"}
           onClick={(event) => toggleMenu({ kind: "more", anchor: event.currentTarget, sub: null })}
         >
-          <Icon name="plus" size={14} />
-          Más filtros
-          {moreCount > 0 ? <span className="gb-v">· {moreCount}</span> : null}
+          <Icon name="funnel" size={14} />
+          Filtros
+          {menuCount > 0 ? <span className="gb-v">· {menuCount}</span> : null}
+          <Icon name="chevron-down" size={14} />
         </button>
         <span className="gb-sp" />
-        {query.view === "lista" ? (
+        {view === "lista" ? (
           <button
             type="button"
             className="gb-btn"
@@ -498,7 +536,7 @@ export function FilterBar({
             Agrupar: {GROUP_META[query.group].label}
             <Icon name="chevron-down" size={14} />
           </button>
-        ) : query.view === "pedidos" ? (
+        ) : view === "pedidos" ? (
           <>
             <HideField query={query} onQuery={onQuery} />
             <button
@@ -511,58 +549,33 @@ export function FilterBar({
               {query.showClosed ? "Ocultar cerrados" : "Ver cerrados"}
             </button>
           </>
-        ) : (
+        ) : view === "kanban" ? (
           <>
+            {query.showClosed ? (
+              <button type="button" className="gb-btn is-ghost" title="Ocultar las columnas Hecha y Cancelada" onClick={() => onQuery({ ...query, showClosed: false })}>
+                <Icon name="eye-off" size={14} />
+                Ocultar cerradas
+              </button>
+            ) : null}
             <button
               type="button"
-              className={cx("gb-btn", lanes && "is-active")}
+              className="gb-btn"
               aria-haspopup="menu"
               aria-expanded={menu?.kind === "lanes"}
               onClick={(event) => toggleMenu({ kind: "lanes", anchor: event.currentTarget })}
             >
               <Icon name="rows" size={14} />
-              {lanes ? (
-                <>
-                  Carriles: <span className="gb-v">{LANE_META[lanes].label}</span>
-                </>
-              ) : (
-                "Carriles"
-              )}
+              Agrupar: {lanes ? LANE_META[lanes].label : "Sin agrupar"}
               <Icon name="chevron-down" size={14} />
             </button>
-            {!disabled && !lanes ? (
-              <button
-                type="button"
-                className="gb-btn is-ghost"
-                title="Desplegar o plegar las subtareas de todas las tarjetas"
-                onClick={() => {
-                  onResetCards();
-                  onQuery({ ...query, subtasksCollapsed: !query.subtasksCollapsed });
-                }}
-              >
-                <Icon name="list-tree" size={14} />
-                {query.subtasksCollapsed ? "Desplegar subtareas" : "Plegar subtareas"}
-              </button>
-            ) : null}
-            {query.showClosed ? (
-              <button
-                type="button"
-                className={cx("gb-btn", "is-ghost", lanes && "is-icon")}
-                {...iconOnly("Ocultar cerradas")}
-                onClick={() => onQuery({ ...query, showClosed: false })}
-              >
-                <Icon name="eye-off" size={14} />
-                {lanes ? null : "Ocultar cerradas"}
-              </button>
-            ) : null}
           </>
-        )}
+        ) : null}
       </div>
 
-      {index && hasChipFilters(filters) ? (
+      {index && (chipDims.length > 0 || filters.act || filters.q) ? (
         <div className="gb-chips">
           Filtros:
-          {FILTER_DIMS.filter((dim) => filters[dim].length > 0).map((dim) => (
+          {chipDims.map((dim) => (
             <span key={dim} className="gb-fchip">
               <span className="gb-k">{DIM_META[dim].label}</span>
               <button
@@ -604,11 +617,7 @@ export function FilterBar({
               </button>
             </span>
           ) : null}
-          <button
-            type="button"
-            className="gb-linkbtn"
-            onClick={() => setFilters(emptyFilters())}
-          >
+          <button type="button" className="gb-linkbtn" onClick={() => setFilters(emptyFilters())}>
             Limpiar todo
           </button>
         </div>
@@ -618,7 +627,7 @@ export function FilterBar({
         <Popover
           anchor={menu.anchor}
           width={menuWidth(menu)}
-          align={menu.kind === "lanes" ? "end" : "start"}
+          align={menu.kind === "lanes" || menu.kind === "group" ? "end" : "start"}
           onClose={() => setMenu(null)}
         >
           {menu.kind === "dim" ? (
@@ -636,8 +645,8 @@ export function FilterBar({
             />
           ) : menu.kind === "lanes" ? (
             <>
-              <div className="gb-mh">Carriles del kanban</div>
-              {[null, ...LANE_OPTIONS].map((option) => (
+              <div className="gb-mh">Agrupar el Board por</div>
+              {[...LANE_OPTIONS, null].map((option) => (
                 <button
                   key={option ?? "none"}
                   type="button"
@@ -650,7 +659,7 @@ export function FilterBar({
                   }}
                 >
                   <Icon name={option ? LANE_META[option].icon : "kanban"} size={14} />
-                  <span className="gb-lbl">{option ? LANE_META[option].label : "Sin carriles"}</span>
+                  <span className="gb-lbl">{option ? LANE_META[option].label : "Sin agrupar"}</span>
                   {lanes === option ? <Icon name="check" size={14} /> : null}
                 </button>
               ))}

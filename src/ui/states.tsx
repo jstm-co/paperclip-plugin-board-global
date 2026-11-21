@@ -3,6 +3,7 @@ import {
   clearFilter,
   dependentsOf,
   emptyFilters,
+  hasChipFilters,
   relaxSuggestions,
   type BoardFilters,
   type BoardIndex,
@@ -72,35 +73,51 @@ export function EmptyResults({
   index,
   query,
   onFilters,
+  backlogCount = 0,
+  onBacklog,
 }: {
   index: BoardIndex;
   query: BoardQuery;
   onFilters: (filters: BoardFilters) => void;
+  /** En el Board: tareas del Backlog que sí calzan con los filtros. */
+  backlogCount?: number;
+  onBacklog?: () => void;
 }) {
   const { filters } = query;
   const suggestions = relaxSuggestions(index, filters, query);
+  const filtering = suggestions.length > 0 || hasChipFilters(filters) || filters.toca;
+  const where = query.view === "kanban" ? "en el Board" : query.view === "backlog" ? "en el Backlog" : "";
   return (
     <div className="gb-empty">
       <div className="gb-box">
         <div className="gb-eic">
           <Icon name="search-x" size={18} />
         </div>
-        <h3>No hay tareas con estos filtros</h3>
-        <p>Los contadores de arriba solo aplican el filtro de empresa, así que siguen mostrando sus alertas. Prueba quitando un filtro:</p>
+        <h3>{filtering ? `No hay tareas ${where} con estos filtros`.replace("  ", " ") : `No hay tareas ${where}`.trim()}</h3>
+        <p>
+          {backlogCount > 0
+            ? `En el Backlog hay ${plural(backlogCount, "tarea", "tareas")} que todavía no ${backlogCount === 1 ? "entra" : "entran"} al Board.`
+            : filtering
+              ? "Prueba quitando un filtro:"
+              : "Cuando haya tareas, aparecen aquí."}
+        </p>
         <div className="gb-acts">
+          {backlogCount > 0 && onBacklog ? (
+            <button type="button" className="gb-btn is-sm is-primary" onClick={onBacklog}>
+              Ver el Backlog
+            </button>
+          ) : null}
           {suggestions.map(({ key, count }) => (
             <button key={key} type="button" className="gb-btn is-sm" onClick={() => onFilters(clearFilter(filters, key))}>
               <Icon name="x" size={12} />
               Quitar {relaxLabel(key)} · {plural(count, "tarea", "tareas")}
             </button>
           ))}
-          <button
-            type="button"
-            className="gb-btn is-sm"
-            onClick={() => onFilters(emptyFilters())}
-          >
-            Limpiar todo
-          </button>
+          {filtering ? (
+            <button type="button" className="gb-btn is-sm" onClick={() => onFilters(emptyFilters())}>
+              Limpiar todo
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

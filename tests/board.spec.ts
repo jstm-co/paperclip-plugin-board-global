@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  BACKLOG_STATUSES,
+  BOARD_STATUSES,
+  CONFIRM_COLUMN,
+  FLAT_LANE,
+  HOT_PRIORITIES,
   allBoardQuery,
   ancestorsOf,
-  applyKpi,
+  boardColumns,
+  columnOf,
   clearFilter,
   companyMatchesQuery,
   dateCounts,
@@ -10,17 +16,16 @@ import {
   hiddenLaneCount,
   laneKeyOf,
   buildBoardIndex,
-  computeKpis,
   defaultQuery,
   dependentsOf,
   emptyFilters,
   facetCounts,
   filterIssues,
+  kanbanFlat,
   kanbanLanes,
   kanbanStatuses,
   groupIssues,
-  isKpiActive,
-  openByCompany,
+  isHotFilter,
   parseBoardQuery,
   pinFreshRows,
   progressOf,
@@ -29,7 +34,6 @@ import {
   serializeBoardQuery,
   sortIssues,
   splitTree,
-  subtaskRows,
   companyPaletteKeys,
   toBoardCompany,
   treeRows,
@@ -159,11 +163,25 @@ describe("estado en la URL", () => {
     expect(allBoardQuery(query)).toEqual({ ...defaultQuery(), view: "pedidos", showClosed: true });
   });
 
+  it("el Board abre agrupado por empresa: `carr` solo viaja si es otra cosa, y «sin agrupar» es carr=no", () => {
+    expect(defaultQuery().lanes).toBe("empresa");
+    expect(parseBoardQuery("").lanes).toBe("empresa");
+    expect(parseBoardQuery("?carr=empresa").lanes).toBe("empresa");
+    expect(serializeBoardQuery(parseBoardQuery("?carr=empresa"))).toBe("");
+    expect(parseBoardQuery("?carr=no").lanes).toBeNull();
+    expect(serializeBoardQuery({ ...defaultQuery(), lanes: null })).toBe("?carr=no");
+    expect(serializeBoardQuery({ ...defaultQuery(), lanes: "proyecto" })).toBe("?carr=proyecto");
+    // La vista Backlog viaja como las demás.
+    expect(parseBoardQuery("?v=backlog").view).toBe("backlog");
+    expect(serializeBoardQuery({ ...defaultQuery(), view: "backlog" })).toBe("?v=backlog");
+  });
+
   it("ignora valores desconocidos", () => {
     const query = parseBoardQuery("?v=tabla&grp=color&carr=estado&est=nope,todo&pri=urgente&toca=si&emp=bet");
     expect(query.view).toBe("kanban");
     expect(query.group).toBe("empresa");
-    expect(query.lanes).toBeNull();
+    // Un `carr` desconocido cae en el de siempre: por empresa.
+    expect(query.lanes).toBe("empresa");
     expect(query.filters.est).toEqual(["todo"]);
     expect(query.filters.pri).toEqual([]);
     expect(query.filters.toca).toBe(false);
@@ -427,10 +445,27 @@ describe("búsqueda por empresa (JST-60)", () => {
 });
 
 describe("columnas del kanban", () => {
-  it("las del filtro de estado o las abiertas, y todas con cerr=1", () => {
-    expect(kanbanStatuses(filters({}), false)).toEqual(["backlog", "todo", "in_progress", "in_review", "blocked"]);
-    expect(kanbanStatuses(filters({}), true)).toEqual(["backlog", "todo", "in_progress", "in_review", "blocked", "done", "cancelled"]);
+  it("las del filtro de estado o las del Board (sin Backlog), más las cerradas con cerr=1", () => {
+    expect(kanbanStatuses(filters({}), false)).toEqual(["todo", "in_progress", "in_review", "blocked"]);
+    expect(kanbanStatuses(filters({}), false)).toEqual([...BOARD_STATUSES]);
+    expect(kanbanStatuses(filters({}), true)).toEqual(["todo", "in_progress", "in_review", "blocked", "done", "cancelled"]);
     expect(kanbanStatuses(filters({ est: ["done", "todo"] }), false)).toEqual(["todo", "done"]);
+    // El filtro de estado manda: con él, el Backlog sí puede ser una columna.
+    expect(kanbanStatuses(filters({ est: ["backlog", "todo"] }), false)).toEqual(["backlog", "todo"]);
+  });
+
+  it("«Por confirmar» va después de la última columna abierta y no aparece con filtro de estado", () => {
+    expect(boardColumns(filters({}), false, true)).toEqual(["todo", "in_progress", "in_review", "blocked", CONFIRM_COLUMN]);
+    expect(boardColumns(filters({}), true, true)).toEqual(["todo", "in_progress", "in_review", "blocked", CONFIRM_COLUMN, "done", "cancelled"]);
+    expect(boardColumns(filters({}), false, false)).toEqual(["todo", "in_progress", "in_review", "blocked"]);
+    expect(boardColumns(filters({ est: ["done"] }), true, true)).toEqual(["done"]);
+  });
+
+  it("una tarea cerrada que espera confirmación va en «Por confirmar»; las demás, en su estado", () => {
+    const jst2 = index.byId.get("jst-2")!;
+    expect(columnOf(jst2)).toBe("done");
+    expect(columnOf(jst2, new Set(["jst-2"]))).toBe(CONFIRM_COLUMN);
+    expect(columnOf(index.byId.get("jst-1")!, new Set(["jst-2"]))).toBe("in_progress");
   });
 });
 
@@ -440,6 +475,12 @@ describe("lo que muestra una consulta", () => {
     expect(visibleIssues(index, kanban)).toHaveLength(6);
     expect(visibleIssues(index, { ...kanban, showClosed: true })).toHaveLength(9);
     expect(visibleIssues(index, { ...kanban, view: "lista" })).toHaveLength(9);
+    // El Backlog lista lo suyo y lo que ya está en «Por hacer», aunque el filtro de estado pida otra cosa.
+    expect(ids(visibleIssues(index, { ...kanban, view: "backlog" }))).toEqual(["bet-1", "bet-5"]);
+    expect(BACKLOG_STATUSES).toEqual(["todo", "backlog"]);
+    const conBacklog = buildBoardIndex([{ ...boards[0], issues: [...boards[0].issues, issue("jst-7", "c-jst", { status: "backlog" })] }]);
+    expect(ids(visibleIssues(conBacklog, kanban))).toEqual(["jst-1", "jst-4", "jst-9"]);
+    expect(ids(visibleIssues(conBacklog, { ...kanban, view: "backlog" }))).toEqual(["jst-7"]);
     expect(ids(visibleIssues(index, { ...kanban, filters: filters({ est: ["done"] }) }))).toEqual(["bet-3", "jst-2"]);
   });
 });
@@ -483,6 +524,31 @@ describe("carriles del kanban", () => {
     expect(hiddenLaneCount(index, done("empresa", ["cancelled"]), "empresa", [])).toBe(1);
   });
 
+  it("con «Por confirmar», las cerradas pendientes entran a su carril y salen de su columna de estado", () => {
+    const pending = new Set(["jst-2"]);
+    const columns = boardColumns(filters({}), true, true);
+    const jst = kanbanLanes(index, index.issues, "empresa", columns, pending).find((lane) => lane.companyId === "c-jst")!;
+    expect(jst.total).toBe(4);
+    expect(jst.cells.find((cell) => cell.status === CONFIRM_COLUMN)!.issues.map((i) => i.id)).toEqual(["jst-2"]);
+    expect(jst.cells.find((cell) => cell.status === "done")!.issues).toEqual([]);
+    // Sin la columna de las cerradas, la pendiente igual se ve.
+    const open = kanbanLanes(index, index.issues, "empresa", boardColumns(filters({}), false, true), pending);
+    expect(open.find((lane) => lane.companyId === "c-jst")!.total).toBe(4);
+    expect(open.find((lane) => lane.companyId === "c-bet")!.total).toBe(3);
+  });
+
+  it("sin agrupar es un solo carril con todas las tareas de las columnas visibles", () => {
+    const [lane, ...rest] = kanbanFlat(index, index.issues, BOARD_STATUSES);
+    expect(rest).toEqual([]);
+    expect(lane).toMatchObject({ key: FLAT_LANE, companyId: null, total: 6 });
+    expect(lane.cells.map((cell) => [cell.status, cell.issues.length])).toEqual([
+      ["todo", 2],
+      ["in_progress", 1],
+      ["in_review", 1],
+      ["blocked", 2],
+    ]);
+  });
+
   it("al arrastrar, el carril de la tarjeta sale de su empresa, proyecto o responsable", () => {
     const bet2 = index.byId.get("bet-2")!;
     expect(laneKeyOf(bet2, "empresa")).toBe("c-bet");
@@ -498,8 +564,8 @@ describe("filtro «Actualizada» (act)", () => {
   it("va en la URL como act=7d, después de toca; otros valores se ignoran", () => {
     expect(parseBoardQuery("?act=7d").filters.act).toBe("7d");
     expect(parseBoardQuery("?act=30d").filters.act).toBeNull();
-    const query = { ...defaultQuery(), lanes: "empresa" as const, filters: filters({ est: ["blocked"], toca: true, act: "7d" }) };
-    expect(serializeBoardQuery(query)).toBe("?est=blocked&toca=1&act=7d&carr=empresa");
+    const query = { ...defaultQuery(), lanes: "responsable" as const, filters: filters({ est: ["blocked"], toca: true, act: "7d" }) };
+    expect(serializeBoardQuery(query)).toBe("?est=blocked&toca=1&act=7d&carr=responsable");
   });
 
   it("filtra por updatedAt contado hacia atrás desde ahora", () => {
@@ -577,53 +643,22 @@ describe("tareas nuevas en la Lista (JST-341)", () => {
   });
 });
 
-describe("contadores", () => {
-  it("solo respetan el filtro de empresa", () => {
-    const all = computeKpis(index, []);
-    expect(all.toca.issues.map((i) => i.id)).toEqual(["jst-9"]);
-    expect(ids(all.bloq.issues)).toEqual(["bet-2", "jst-4"]);
-    expect(ids(all.crit.issues)).toEqual(["bet-1", "jst-1"]);
-    expect(all.rev.issues.map((i) => i.id)).toEqual(["jst-9"]);
-    expect(all.bloq.byCompany.map((e) => [e.company.prefix, e.count])).toEqual([
-      ["BET", 1],
-      ["JST", 1],
-    ]);
-    expect(ids(computeKpis(index, ["BET"]).bloq.issues)).toEqual(["bet-2"]);
-  });
-
-  it("un clic reemplaza estado, prioridad, responsable y «Te toca»; otro clic lo quita", () => {
-    const start = filters({ est: ["todo"], pri: ["low"], resp: ["none"], emp: ["BET"], toca: true });
-    const blocked = applyKpi(start, "bloq");
-    expect(blocked).toEqual(filters({ est: ["blocked"], emp: ["BET"] }));
-    expect(isKpiActive(blocked, "bloq")).toBe(true);
-    expect(applyKpi(blocked, "bloq")).toEqual(filters({ emp: ["BET"] }));
-    expect(applyKpi(blocked, "crit")).toEqual(filters({ pri: ["critical", "high"], emp: ["BET"] }));
-    expect(applyKpi(filters({}), "toca")).toEqual(filters({ toca: true }));
-    expect(applyKpi(filters({ toca: true }), "toca")).toEqual(filters({}));
-  });
-
-  it("abiertas por empresa y estado", () => {
-    const bet = openByCompany(index).find((row) => row.company.prefix === "BET")!;
-    expect(bet.total).toBe(3);
-    expect(bet.byStatus).toEqual([
-      { status: "todo", count: 2 },
-      { status: "blocked", count: 1 },
-    ]);
+describe("filtros rápidos", () => {
+  it("«Críticas y altas» está encendido cuando la prioridad es exactamente esas dos", () => {
+    expect(isHotFilter(filters({ pri: [...HOT_PRIORITIES] }))).toBe(true);
+    expect(isHotFilter(filters({ pri: ["high", "critical"] }))).toBe(true);
+    expect(isHotFilter(filters({ pri: ["critical"] }))).toBe(false);
+    expect(isHotFilter(filters({ pri: ["critical", "high", "low"] }))).toBe(false);
+    expect(isHotFilter(filters({}))).toBe(false);
+    // Los conteos de la barra salen de lo que mostraría la vista con el filtro encendido.
+    expect(ids(visibleIssues(index, { ...defaultQuery(), filters: filters({ pri: [...HOT_PRIORITIES] }) }))).toEqual(["bet-1", "jst-1"]);
+    expect(ids(visibleIssues(index, { ...defaultQuery(), filters: filters({ toca: true }) }))).toEqual(["jst-9"]);
   });
 });
 
 describe("árbol de subtareas", () => {
   it("avance como en Jira: hechas sobre el total, sin canceladas", () => {
     expect(progressOf(index, index.byId.get("bet-1")!)).toEqual({ done: 1, total: 2 });
-  });
-
-  it("filas de la tarjeta: abiertas primero y nietas sangradas", () => {
-    expect(subtaskRows(index, index.byId.get("bet-1")!).map((r) => [r.issue.id, r.depth])).toEqual([
-      ["bet-2", 0],
-      ["bet-5", 1],
-      ["bet-3", 0],
-      ["bet-4", 0],
-    ]);
   });
 
   it("en la lista muestra al padre como contexto si no cumple el filtro", () => {

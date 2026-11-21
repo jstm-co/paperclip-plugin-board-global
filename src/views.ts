@@ -3,6 +3,7 @@
 // escrituras optimistas) y el worker (validación y `ctx.state`).
 import {
   BOARD_USER,
+  DEFAULT_LANES,
   FILTER_DIMS,
   allBoardQuery,
   assigneeLabel,
@@ -55,7 +56,7 @@ function assertName(views: readonly SavedView[], name: string, exceptId?: string
 export function viewSearch(query: BoardQuery): string {
   return serializeBoardQuery({
     ...query,
-    lanes: query.view === "kanban" ? query.lanes : null,
+    lanes: query.view === "kanban" ? query.lanes : DEFAULT_LANES,
     hide: query.view === "pedidos" ? query.hide : [],
   });
 }
@@ -117,7 +118,7 @@ export function viewCount(index: BoardIndex, view: SavedView, now: number = Date
 // ---------------------------------------------------------------------------
 
 /**
- * - `all`: «Todo el board» (sin filtros ni carriles).
+ * - `all`: «Todo el board» (sin filtros y agrupado por empresa).
  * - `view`: la URL coincide con una vista guardada.
  * - `mod`: la URL ya no coincide, pero viene de la última vista abierta (`originId`): «Cambios sin guardar».
  * - `unsaved`: filtros que no son de ninguna vista.
@@ -194,7 +195,11 @@ export function suggestViewName(index: BoardIndex, query: BoardQuery, views: rea
     name += " de todas las empresas";
   }
   if (filters.act) name = name ? `${name} · últimos 7 días` : "Actualizadas en los últimos 7 días";
-  if (query.view === "kanban" && query.lanes) name = name ? `${name} · por ${query.lanes}` : `Por ${query.lanes}`;
+  if (query.view === "kanban" && query.lanes !== DEFAULT_LANES) {
+    const lanes = query.lanes ? `por ${query.lanes}` : "sin agrupar";
+    name = name ? `${name} · ${lanes}` : `${lanes[0].toUpperCase()}${lanes.slice(1)}`;
+  }
+  if (query.view === "backlog") name = name ? `Backlog · ${name}` : "Backlog";
   if (query.view === "pedidos") name = name ? `Pedidos · ${name}` : "Pedidos";
   if (!name) name = query.view === "lista" ? `Lista por ${query.group}` : "Mi vista";
 
@@ -211,7 +216,7 @@ export function hasViewFilters(query: BoardQuery): boolean {
     !!filters.q.trim() ||
     filters.toca ||
     filters.act !== null ||
-    (query.view === "kanban" && query.lanes !== null) ||
+    (query.view === "kanban" && query.lanes !== DEFAULT_LANES) ||
     (query.view === "pedidos" && query.hide.length > 0)
   );
 }
