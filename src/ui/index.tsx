@@ -36,9 +36,11 @@ import { Header } from "./header.js";
 import { BoardSkeleton, LaneBoard, badDropMessage, boardLanes, laneUiKey } from "./lanes.js";
 import { ToastStack, useToasts } from "./layer.js";
 import { ListView } from "./list.js";
+import { OpenTaskProvider } from "./open.js";
 import { EmptyPedidos, PedidosView } from "./pedidos.js";
 import { EmptyResults, LoadFailed, PartialErrorBanner, TocaBanner } from "./states.js";
 import { ensureStyles } from "./styles.js";
+import { TaskModal } from "./task.js";
 import { useBoardData } from "./useBoardData.js";
 import { useConfirmations } from "./useConfirmations.js";
 import { useLiveRuns } from "./usePedidos.js";
@@ -312,6 +314,17 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
     peekTimer.current = window.setTimeout(() => setPeek({ issueId: issue.id, rect: element.getBoundingClientRect() }), PEEK_DELAY_MS);
   }, []);
 
+  // Modal de tarea (JST-408): el clic en una tarjeta o fila la abre aquí, sin salir del Board.
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const openTask = useCallback(
+    (issue: BoardIssue) => {
+      onPeek(null);
+      setTaskId(issue.id);
+    },
+    [onPeek],
+  );
+  const closeTask = useCallback(() => setTaskId(null), []);
+
   // Arrastrar y soltar: actualización optimista + PATCH nativo + toast con «Deshacer».
   const [dragging, setDragging] = useState<BoardIssue | null>(null);
   const onDragStart = useCallback((issue: BoardIssue) => setDragging(issue), []);
@@ -413,11 +426,13 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
   };
 
   const peekIssue = peek && index ? index.byId.get(peek.issueId) : undefined;
+  const taskIssue = taskId && index ? index.byId.get(taskId) : undefined;
   const shown = inBoard ? boardIssues : inBacklog ? backlogIssues : filtered;
 
   return (
     <CreateProvider value={create}>
     <MarksProvider value={marks}>
+    <OpenTaskProvider value={openTask}>
     <div ref={rootRef} className="gb" style={{ height }} onScrollCapture={() => onPeek(null)}>
       <Header
         loading={loading}
@@ -516,9 +531,24 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
         />
       )}
 
-      {peekIssue && peek && !dragging ? <Peek index={index!} issue={peekIssue} anchor={peek.rect} now={now} /> : null}
+      {peekIssue && peek && !dragging && !taskIssue ? <Peek index={index!} issue={peekIssue} anchor={peek.rect} now={now} /> : null}
+      {taskIssue ? (
+        <TaskModal
+          index={index!}
+          issue={taskIssue}
+          now={now}
+          userId={userId}
+          pending={pending.has(taskIssue.id)}
+          onClose={closeTask}
+          onOpen={openTask}
+          onMove={(issue, to) => void move(issue, issue.status, to, false)}
+          onConfirm={onConfirm}
+          onCommented={(issue) => void refreshCompany(issue.companyId)}
+        />
+      ) : null}
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>
+    </OpenTaskProvider>
     </MarksProvider>
     </CreateProvider>
   );

@@ -27,10 +27,10 @@ import {
   assigneeName,
   cx,
   isOwnClick,
-  openHref,
   plural,
 } from "./common.js";
 import { Icon, type IconName } from "./icons.js";
+import { useOpenTask } from "./open.js";
 import { usePedidoNotes, type PedidoNote } from "./usePedidos.js";
 
 const SECTION_STEP = 25;
@@ -183,8 +183,9 @@ function Section({
 
 /** Enlace a otra tarea dentro de la celda: va por encima del enlace que cubre la fila. */
 function TaskLink({ index, issue, children }: { index: BoardIndex; issue: BoardIssue; children?: ReactNode }) {
+  const openTask = useOpenTask();
   return (
-    <a className="gb-plink gb-mono" href={hrefFor(index, issue)} title={issue.title}>
+    <a className="gb-plink gb-mono" href={hrefFor(index, issue)} title={issue.title} onClick={openTask.link(issue)}>
       {children ?? issue.identifier}
     </a>
   );
@@ -329,6 +330,7 @@ function Row({
 }) {
   const { issue, progress } = row;
   const href = hrefFor(index, issue);
+  const openTask = useOpenTask();
   const hit = row.hits[0];
   return (
     <div className={cx("gb-prow", `is-${row.state}`, open && "is-open")} data-iid={issue.id}>
@@ -336,7 +338,7 @@ function Row({
         className="gb-pmain"
         onClick={(event) => {
           // El enlace cubre la fila; esto cubre los iconos que quedan encima para mostrar su título.
-          if (isOwnClick(event)) openHref(href, event);
+          if (isOwnClick(event)) openTask.row(issue, href, event);
         }}
       >
         <span className="gb-pexp">
@@ -362,7 +364,7 @@ function Row({
           <span className="gb-ptitle">
             {/* Un pedido cerrado que sigue en la lista (cabos sueltos, o «Ver cerrados») lleva su estado a la vista. */}
             {isOpenStatus(issue.status) ? null : <StatusIcon status={issue.status} />}
-            <a className="gb-tt gb-cover" href={href} title={issue.title} aria-label={`${issue.identifier ?? ""} ${issue.title}`}>
+            <a className="gb-tt gb-cover" href={href} title={issue.title} aria-label={`${issue.identifier ?? ""} ${issue.title}`} onClick={openTask.link(issue)}>
               {issue.title}
             </a>
           </span>
@@ -419,6 +421,7 @@ function Row({
 function Tree({ index, root, live, now }: { index: BoardIndex; root: BoardIssue; live: ReadonlyMap<string, readonly LiveRun[]>; now: number }) {
   const rows = useMemo(() => pedidoTree(index, root), [index, root]);
   const [limit, setLimit] = useState(TREE_STEP);
+  const openTask = useOpenTask();
   return (
     <div className="gb-ptree">
       {rows.slice(0, limit).map(({ issue, depth }) => {
@@ -431,12 +434,12 @@ function Tree({ index, root, live, now }: { index: BoardIndex; root: BoardIssue;
             className={cx("gb-pkid", !isOpenStatus(issue.status) && "is-closed", index.waiting.has(issue.id) && "is-w")}
             style={{ "--d": depth } as CSSProperties}
             onClick={(event) => {
-              if (isOwnClick(event)) openHref(href, event);
+              if (isOwnClick(event)) openTask.row(issue, href, event);
             }}
           >
             <StatusIcon status={issue.status} size={12} />
             <span className="gb-kidid gb-mono">{issue.identifier}</span>
-            <a className="gb-tt gb-cover" href={href} title={issue.title}>
+            <a className="gb-tt gb-cover" href={href} title={issue.title} onClick={openTask.link(issue)}>
               {issue.title}
             </a>
             {index.waiting.has(issue.id) ? <TocaPill small /> : null}

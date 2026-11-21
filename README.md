@@ -38,6 +38,7 @@ A [Paperclip](https://github.com/paperclipai/paperclip) plugin that brings every
   - **Search** matches ID, title or company, ignoring accents and case. An issue shows up if the text is in its ID or title, or if its company name, a word of that name, or its prefix starts with the text. The company part needs at least 3 characters and does not search inside the name: `corp` does not bring up all of «Betacorp».
 - **Drag** a card to another column to change its status with `PATCH /api/issues/:id`, just like the built-in kanban. The toast offers «Deshacer» (undo). If the API rejects the change, the card goes back.
 - **Create issues:** «+ Crear» (create) in each cell of the Por hacer and En curso columns opens a composer in place: type a title and press Enter. The same entry point exists as a «Nueva tarea en…» row under each List group and each Backlog group, and as the «Crear tarea» button in the header. Company, project, assignee and priority come from the swimlane, group or the active filter; with no company to start from you choose one. Assigning an agent wakes it up (except in Backlog), and the composer says so; En curso needs an assignee, so it starts as «Yo» (you). It uses `POST /api/companies/:id/issues` with your session, so it needs no new permission. A title already open in the last 48 hours is not created twice (the server returns the existing issue and the board marks it).
+- **Issue modal:** clicking a card or a row opens the issue on top of the board, without leaving the page: description, sub-issues, comments (you can write one), status change and, for an issue in «Por confirmar», its «Confirmar» button. Opening it marks the issue as read, like its own page does. Sub-issues, parents and blockers open in the same modal. Ctrl or ⌘ + click (and the browser's other link gestures) still goes to the issue page, and so does the «Página completa» link in the modal, where documents, runs and approvals live.
 - **Preview** after hovering a card for 450 ms: details, «Te toca» and the issue tree.
 - **Per-company loading:** if a company does not respond, the rest of the board keeps working and that company can be retried on its own.
 - **Company colors:** if the company has a brand color in Paperclip («Brand color» in its settings), that one is used. Otherwise the first 4 companies in alphabetical order of the name get one of 4 fixed colors, and from the fifth on they are gray. The prefix always goes next to the color.
@@ -191,13 +192,14 @@ npx paperclipai plugin uninstall jstm.board-global --force    # deletes everythi
 | `ui.action.register` | The «Board global» button in the top bar. |
 
 - The plugin does not call any external service: everything goes to your own Paperclip instance's API.
-- Projects, agents, the Inbox («Te toca»), the Dashboard, the status change when dragging, creating issues and, in the Pedidos view, the active runs and the last comment of each request use the built-in API with the session of the user viewing the page. That way the same core rules and permissions apply.
+- Projects, agents, the Inbox («Te toca»), the Dashboard, the status change when dragging, creating issues, the issue modal (description, comments, writing a comment and marking the issue as read) and, in the Pedidos view, the active runs and the last comment of each request use the built-in API with the session of the user viewing the page. That way the same core rules and permissions apply.
 - Saved views and confirmations belong to the whole instance: they are not per user.
 
 ## Known limitations
 
 - **«Te toca»** needs a user session in the browser. If the Inbox cannot be read, the quick filter is disabled.
 - **«Por confirmar»** does not know who closed an issue: one you closed yourself outside the board, in Paperclip's own pages, also shows up there.
+- **Issue modal:** it shows the last 50 comments and does not edit the title, description, assignee or priority; approvals, documents and runs are on the issue page.
 - **Assigned people:** the SDK does not expose their names. `local-board` shows up as «Board» and other people as «Persona» (person) with a short id.
 - **Links to other companies:** opening an issue from another company reloads the app, because the host's navigation prepends the active company.
 - **Pagination:** each company is requested in full (in Paperclip `2026.824.1`, `ctx.issues.list` with `offset` returns nothing). With about 400 issues per company it takes about 65 ms in the worker.
@@ -216,7 +218,7 @@ npm test            # tests for the board, dashboard and worker logic
 npm run typecheck
 ```
 
-The tests cover what does not depend on React: URL state, filters and counts, date filter, sorting, quick filters, «Te toca», sub-issue tree, grouping, swimlanes, board columns, the Backlog view, «Por confirmar», company colors, saved views, the Pedidos view (subtree, who has the ball, search by sub-issue, hidden titles and latest news) and the fields the worker returns. On the Dashboard: totals, budget %, 14-day charts, comparison sorting, company filter, formats and activity texts.
+The tests cover what does not depend on React: URL state, filters and counts, date filter, sorting, quick filters, «Te toca», sub-issue tree, grouping, swimlanes, board columns, the Backlog view, «Por confirmar», the issue modal (which clicks open it, comment order and authors), company colors, saved views, the Pedidos view (subtree, who has the ball, search by sub-issue, hidden titles and latest news) and the fields the worker returns. On the Dashboard: totals, budget %, 14-day charts, comparison sorting, company filter, formats and activity texts.
 
 Paperclip serves the interface from `dist/ui/` in the installed folder on every page load: a build in that folder changes what the user sees even if you do not run `upgrade`. If you develop on an instance you use every day, install from a separate copy.
 
@@ -228,6 +230,7 @@ Paperclip serves the interface from `dist/ui/` in the installed folder on every 
 | Worker | `src/worker.ts` | `company-issues` data: the issues of **one** company with only the board's fields. `saved-views` data and `view-create`, `view-rename`, `view-update` and `view-delete` actions for saved views, one operation at a time. `confirmations` data and `confirm-add` and `confirm-remove` actions for «Por confirmar». |
 | Board logic | `src/board.ts` | URL, multi-company index, colors, filters, sorting, «Te toca», tree, grouping, swimlanes and board columns. No React. |
 | «Por confirmar» | `src/confirm.ts`, `src/ui/useConfirmations.ts` | Which closed root issues wait for confirmation, and the confirm and undo operations. |
+| Issue modal | `src/task.ts`, `src/ui/task.tsx`, `src/ui/open.tsx` | Which clicks open the modal, comment authors and order, and the modal itself with its description, sub-issues and comments. |
 | Pedidos logic | `src/pedidos.ts` | Subtree of each root issue, full progress, who has the ball, which requests each filter shows and the first line of a comment. No React. |
 | Saved views | `src/views.ts`, `src/ui/views.tsx`, `src/ui/useSavedViews.ts` | Names, suggested name, tab state, worker operations and optimistic writes. |
 | UI data | `src/ui/useBoardData.ts`, `src/ui/useDashboardData.ts`, `src/ui/usePedidos.ts`, `src/ui/bridge.ts` | Parallel loading per company, retry and status change. In Pedidos, active runs and last comment. |

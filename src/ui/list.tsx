@@ -18,6 +18,7 @@ import {
 import { canCreateIn, type CreateOrigin } from "../create.js";
 import { OPEN_STATUSES, isOpenStatus, type BoardIssue, type IssuePriority, type IssueStatus } from "../shared.js";
 import { hrefFor } from "./card.js";
+import { useOpenTask } from "./open.js";
 import {
   Avatar,
   CompanyTag,
@@ -32,7 +33,6 @@ import {
   companyStyle,
   cx,
   isOwnClick,
-  openHref,
   plural,
 } from "./common.js";
 import { CreateSlot, MarkPill, markClass, useMark } from "./create.js";
@@ -285,13 +285,14 @@ function ListRow({
   const progress = progressOf(index, issue);
   const who = assigneeName(index, issue);
   const mark = useMark(issue.id);
+  const openTask = useOpenTask();
   return (
     <div
       data-iid={issue.id}
       className={cx("gb-row", markClass(mark), tree?.context && "gb-ctx", index.waiting.has(issue.id) && "is-w")}
       onClick={(event) => {
         // El enlace cubre la fila; esto cubre los iconos que quedan encima para mostrar su título.
-        if (isOwnClick(event)) openHref(href, event);
+        if (isOwnClick(event)) openTask.row(issue, href, event);
       }}
     >
       <StatusIcon status={issue.status} />
@@ -306,6 +307,7 @@ function ListRow({
           href={href}
           title={issue.title}
           aria-label={`${issue.identifier ?? ""} ${issue.title}`}
+          onClick={openTask.link(issue)}
         >
           {issue.title}
         </a>
