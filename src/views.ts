@@ -13,9 +13,11 @@ import {
   visibleIssues,
   type BoardIndex,
   type BoardQuery,
+  type GroupBy,
 } from "./board.js";
 import { pedidoRoots } from "./pedidos.js";
 import type { IssuePriority, IssueStatus } from "./shared.js";
+import { t } from "./i18n.js";
 
 export const VIEW_NAME_MAX = 60;
 
@@ -34,10 +36,10 @@ export function cleanViewName(name: string): string {
 /** Por qué no sirve el nombre, o `null`. `exceptId` es la vista que se renombra. */
 export function viewNameError(views: readonly SavedView[], name: string, exceptId?: string): string | null {
   const clean = cleanViewName(name);
-  if (!clean) return "Escribe un nombre.";
-  if (clean.length > VIEW_NAME_MAX) return `Máximo ${VIEW_NAME_MAX} caracteres.`;
+  if (!clean) return t("Escribe un nombre.");
+  if (clean.length > VIEW_NAME_MAX) return t("Máximo {max} caracteres.", { max: VIEW_NAME_MAX });
   const key = normalizeText(clean);
-  if (views.some((view) => view.id !== exceptId && normalizeText(view.name) === key)) return "Ya hay una vista con ese nombre.";
+  if (views.some((view) => view.id !== exceptId && normalizeText(view.name) === key)) return t("Ya hay una vista con ese nombre.");
   return null;
 }
 
@@ -146,22 +148,38 @@ export function viewState(views: readonly SavedView[] | null, query: BoardQuery,
 // ---------------------------------------------------------------------------
 
 const STATUS_PLURAL: Record<IssueStatus, string> = {
-  backlog: "Backlog",
-  todo: "Por hacer",
-  in_progress: "En curso",
-  in_review: "En revisión",
-  blocked: "Bloqueadas",
-  done: "Hechas",
-  cancelled: "Canceladas",
+  backlog: t("Backlog"),
+  todo: t("Por hacer"),
+  in_progress: t("En curso"),
+  in_review: t("En revisión"),
+  blocked: t("Bloqueadas"),
+  done: t("Hechas"),
+  cancelled: t("Canceladas"),
 };
 
-const PRIORITY_PLURAL: Record<IssuePriority, string> = { critical: "Críticas", high: "Altas", medium: "Medias", low: "Bajas" };
+const PRIORITY_PLURAL: Record<IssuePriority, string> = { critical: t("Críticas"), high: t("Altas"), medium: t("Medias"), low: t("Bajas") };
 
 /** «Críticas y altas», «Bloqueadas, en curso y en revisión». */
 function joinY(words: string[]): string {
   if (words.length <= 1) return words.join("");
   const rest = words.slice(1).map((word) => word.toLowerCase());
-  return `${[words[0], ...rest.slice(0, -1)].join(", ")} y ${rest[rest.length - 1]}`;
+  return t("{head} y {last}", { head: [words[0], ...rest.slice(0, -1)].join(", "), last: rest[rest.length - 1] });
+}
+
+/** «por empresa»: cómo se dice la agrupación dentro de un nombre. */
+function byGroup(group: GroupBy): string {
+  switch (group) {
+    case "empresa":
+      return t("por empresa");
+    case "estado":
+      return t("por estado");
+    case "proyecto":
+      return t("por proyecto");
+    case "responsable":
+      return t("por responsable");
+    case "prioridad":
+      return t("por prioridad");
+  }
 }
 
 /**
@@ -172,36 +190,36 @@ function joinY(words: string[]): string {
 export function suggestViewName(index: BoardIndex, query: BoardQuery, views: readonly SavedView[]): string {
   const { filters } = query;
   const parts: string[] = [];
-  if (filters.toca) parts.push("Te toca");
-  if (filters.pri.length) parts.push(filters.pri.length <= 2 ? joinY(filters.pri.map((p) => PRIORITY_PLURAL[p])) : `${filters.pri.length} prioridades`);
-  if (filters.est.length) parts.push(filters.est.length <= 2 ? joinY(filters.est.map((s) => STATUS_PLURAL[s])) : `${filters.est.length} estados`);
+  if (filters.toca) parts.push(t("Te toca"));
+  if (filters.pri.length) parts.push(filters.pri.length <= 2 ? joinY(filters.pri.map((p) => PRIORITY_PLURAL[p])) : t("{n} prioridades", { n: filters.pri.length }));
+  if (filters.est.length) parts.push(filters.est.length <= 2 ? joinY(filters.est.map((s) => STATUS_PLURAL[s])) : t("{n} estados", { n: filters.est.length }));
   if (filters.prj.length) {
-    parts.push(filters.prj.length === 1 ? (index.projectById.get(filters.prj[0])?.name ?? "Sin proyecto") : `${filters.prj.length} proyectos`);
+    parts.push(filters.prj.length === 1 ? (index.projectById.get(filters.prj[0])?.name ?? t("Sin proyecto")) : t("{n} proyectos", { n: filters.prj.length }));
   }
   const mine = filters.resp.length === 1 && filters.resp[0] === BOARD_USER;
-  if (filters.resp.length) parts.push(mine ? "Lo mío" : filters.resp.length === 1 ? assigneeLabel(index, filters.resp[0]) : `${filters.resp.length} responsables`);
-  if (filters.eti.length) parts.push(filters.eti.length === 1 ? filters.eti[0] : `${filters.eti.length} etiquetas`);
+  if (filters.resp.length) parts.push(mine ? t("Lo mío") : filters.resp.length === 1 ? assigneeLabel(index, filters.resp[0]) : t("{n} responsables", { n: filters.resp.length }));
+  if (filters.eti.length) parts.push(filters.eti.length === 1 ? filters.eti[0] : t("{n} etiquetas", { n: filters.eti.length }));
   const q = cleanViewName(filters.q);
-  if (q) parts.push(`«${q}»`);
+  if (q) parts.push(t("«{q}»", { q }));
 
   let name = parts.join(" · ");
   if (filters.emp.length === 1) {
     const company = index.companies.find((c) => c.prefix === filters.emp[0])?.name ?? filters.emp[0];
-    name = name ? `${name} de ${company}` : company;
+    name = name ? t("{name} de {company}", { name, company }) : company;
   } else if (filters.emp.length > 1) {
     const prefixes = [...filters.emp].sort().join(", ");
-    name = name ? `${name} · ${prefixes}` : prefixes;
+    name = name ? t("{name} · {prefixes}", { name, prefixes }) : prefixes;
   } else if (name && !(mine && parts.length === 1)) {
-    name += " de todas las empresas";
+    name = t("{name} de todas las empresas", { name });
   }
-  if (filters.act) name = name ? `${name} · últimos 7 días` : "Actualizadas en los últimos 7 días";
+  if (filters.act) name = name ? t("{name} · últimos 7 días", { name }) : t("Actualizadas en los últimos 7 días");
   if (query.view === "kanban" && query.lanes !== DEFAULT_LANES) {
-    const lanes = query.lanes ? `por ${query.lanes}` : "sin agrupar";
+    const lanes = query.lanes ? byGroup(query.lanes) : t("sin agrupar");
     name = name ? `${name} · ${lanes}` : `${lanes[0].toUpperCase()}${lanes.slice(1)}`;
   }
-  if (query.view === "backlog") name = name ? `Backlog · ${name}` : "Backlog";
-  if (query.view === "pedidos") name = name ? `Pedidos · ${name}` : "Pedidos";
-  if (!name) name = query.view === "lista" ? `Lista por ${query.group}` : "Mi vista";
+  if (query.view === "backlog") name = name ? t("Backlog · {name}", { name }) : t("Backlog");
+  if (query.view === "pedidos") name = name ? t("Pedidos · {name}", { name }) : t("Pedidos");
+  if (!name) name = query.view === "lista" ? t("Lista {by}", { by: byGroup(query.group) }) : t("Mi vista");
 
   let out = name.slice(0, VIEW_NAME_MAX).trim();
   for (let n = 2; viewNameError(views, out) !== null && n < 100; n++) out = `${name.slice(0, VIEW_NAME_MAX - 6).trim()} (${n})`;
@@ -284,11 +302,11 @@ export type ViewOpResult =
 export function parseViewOp(op: ViewOp["op"], params: Record<string, unknown>): ViewOp {
   const text = (key: string) => {
     const value = params[key];
-    if (typeof value !== "string") throw new Error(`Falta "${key}"`);
+    if (typeof value !== "string") throw new Error(t('Falta "{key}"', { key }));
     return value;
   };
   const id = text("id");
-  if (!id) throw new Error('Falta "id"');
+  if (!id) throw new Error(t('Falta "{key}"', { key: "id" }));
   switch (op) {
     case "create":
       return { op, id, name: text("name"), search: text("search") };
@@ -309,12 +327,12 @@ export function applyViewOp(views: readonly SavedView[], op: ViewOp, now: string
   const current = [...views];
   const exists = current.some((view) => view.id === op.id);
   if (op.op === "create") {
-    if (exists) return { ok: false, reason: "invalid", message: "Ya hay una vista con ese id.", views: current };
+    if (exists) return { ok: false, reason: "invalid", message: t("Ya hay una vista con ese id."), views: current };
     const error = viewNameError(current, op.name);
     if (error) return { ok: false, reason: "invalid", message: error, views: current };
     return { ok: true, views: [...current, { id: op.id, name: cleanViewName(op.name), search: normalizeSearch(op.search), createdAt: now }] };
   }
-  if (!exists) return { ok: false, reason: "not_found", message: "La vista ya no existe.", views: current };
+  if (!exists) return { ok: false, reason: "not_found", message: t("La vista ya no existe."), views: current };
   if (op.op === "delete") return { ok: true, views: deleteView(current, op.id) };
   if (op.op === "rename") {
     const error = viewNameError(current, op.name, op.id);

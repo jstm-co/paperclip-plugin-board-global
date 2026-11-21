@@ -24,6 +24,7 @@ import {
   type LaneBy,
 } from "../board.js";
 import { pendingConfirmation } from "../confirm.js";
+import { localeTag, t } from "../i18n.js";
 import { pedidoRows } from "../pedidos.js";
 import { PAGE_ROUTE, isOpenStatus, type BoardIssue, type IssueStatus } from "../shared.js";
 import { BacklogView } from "./backlog.js";
@@ -32,6 +33,7 @@ import { Peek } from "./card.js";
 import { CreateProvider, MarksProvider, useCreateFlow, useMarks } from "./create.js";
 import { STATUS_LABELS, plural, useNow } from "./common.js";
 import { FilterBar } from "./filters.js";
+import { tx } from "./i18n.js";
 import { Header } from "./header.js";
 import { BoardSkeleton, LaneBoard, badDropMessage, boardLanes, laneUiKey } from "./lanes.js";
 import { ToastStack, useToasts } from "./layer.js";
@@ -82,7 +84,7 @@ export function BoardGlobalSidebarLink(_props: PluginSidebarProps) {
       <span className="relative shrink-0">
         <KanbanIcon />
       </span>
-      <span className="flex-1 truncate">Board global</span>
+      <span className="flex-1 truncate">{t("Board global")}</span>
     </a>
   );
 }
@@ -102,12 +104,12 @@ export function BoardGlobalToolbarButton() {
     <a
       {...navigation.linkProps(`/${PAGE_ROUTE}`)}
       aria-current={active ? "page" : undefined}
-      aria-label="Board global"
-      title="Board global: las tareas de todas las empresas"
+      aria-label={t("Board global")}
+      title={t("Board global: las tareas de todas las empresas")}
       className={`gb-layer gb-tb${active ? " is-on" : ""}`}
     >
       <KanbanIcon />
-      <span className="gb-tb-lbl">Board global</span>
+      <span className="gb-tb-lbl">{t("Board global")}</span>
     </a>
   );
 }
@@ -332,7 +334,7 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
 
   const idLabel = (issue: BoardIssue) => (
     <b className="gb-mono" style={{ fontWeight: 500 }}>
-      {issue.identifier ?? "La tarea"}
+      {issue.identifier ?? t("La tarea")}
     </b>
   );
 
@@ -346,21 +348,17 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
         await confirmIds(ids);
         toast({
           content:
-            issues.length === 1 ? (
-              <>
-                {idLabel(issues[0]!)} confirmada · queda en {STATUS_LABELS[issues[0]!.status]}
-              </>
-            ) : (
-              `${issues.length} tareas confirmadas`
-            ),
+            issues.length === 1
+              ? tx("{id} confirmada · queda en {status}", { id: idLabel(issues[0]!), status: STATUS_LABELS[issues[0]!.status] })
+              : t("{n} tareas confirmadas", { n: issues.length }),
           action: {
-            label: "Deshacer",
+            label: t("Deshacer"),
             run: () =>
-              void unconfirmIds(ids).catch((err: Error) => toast({ error: true, content: `No se pudo deshacer la confirmación: ${err.message}` })),
+              void unconfirmIds(ids).catch((err: Error) => toast({ error: true, content: t("No se pudo deshacer la confirmación: {message}", { message: err.message }) })),
           },
         });
       } catch (err) {
-        toast({ error: true, content: `No se pudo confirmar: ${(err as Error).message}` });
+        toast({ error: true, content: t("No se pudo confirmar: {message}", { message: (err as Error).message }) });
       }
     },
     [confirmIds, unconfirmIds, toast],
@@ -368,7 +366,7 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
   const onConfirm = useCallback((issue: BoardIssue) => void confirmIssues([issue]), [confirmIssues]);
 
   const move = async (issue: BoardIssue, from: IssueStatus, to: IssueStatus, undo: boolean) => {
-    const label = issue.identifier ?? "la tarea";
+    const label = issue.identifier ?? t("la tarea");
     // Si la cierra la persona desde el board, no hace falta que después la confirme. Al
     // deshacer una reapertura sí vuelve a «Por confirmar», como estaba.
     const selfClose = !undo && !isOpenStatus(to) && !issue.parentId && confirmations.state !== null;
@@ -379,20 +377,27 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
       // Después del cambio de estado: la confirmación tiene que quedar con hora posterior al cierre.
       if (selfClose && status === to) await confirmIds([issue.id]).catch(() => undefined);
       if (selfClose) settle();
+      const idNode = (
+        <b className="gb-mono" style={{ fontWeight: 500 }}>
+          {label}
+        </b>
+      );
       toast({
         content: (
           <>
-            <b className="gb-mono" style={{ fontWeight: 500 }}>
-              {label}
-            </b>{" "}
-            {undo ? "volvió a" : "movida a"} {STATUS_LABELS[status]}
+            {undo
+              ? tx("{id} volvió a {status}", { id: idNode, status: STATUS_LABELS[status] })
+              : tx("{id} movida a {status}", { id: idNode, status: STATUS_LABELS[status] })}
           </>
         ),
-        action: undo ? undefined : { label: "Deshacer", run: () => void move(issue, status, from, true) },
+        action: undo ? undefined : { label: t("Deshacer"), run: () => void move(issue, status, from, true) },
       });
     } catch (err) {
       if (selfClose) settle();
-      toast({ error: true, content: `No se pudo ${undo ? "deshacer el cambio de" : "mover"} ${label}: ${(err as Error).message}` });
+      toast({ error: true, content: undo
+          ? t("No se pudo deshacer el cambio de {task}: {message}", { task: label, message: (err as Error).message })
+          : t("No se pudo mover {task}: {message}", { task: label, message: (err as Error).message }),
+      });
     }
   };
   const onDrop = (status: IssueStatus) => {
@@ -421,8 +426,8 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
     void confirmations.reload();
     const result = await data.refresh();
     if (!result) return;
-    const seconds = (result.elapsedMs / 1000).toLocaleString("es-CL", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-    toast({ content: `Board actualizado · ${plural(result.ok, "empresa", "empresas")} en ${seconds} s` });
+    const seconds = (result.elapsedMs / 1000).toLocaleString(localeTag(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    toast({ content: t("Board actualizado · {companies} en {seconds} s", { companies: plural(result.ok, "empresa", "empresas"), seconds }) });
   };
 
   const peekIssue = peek && index ? index.byId.get(peek.issueId) : undefined;

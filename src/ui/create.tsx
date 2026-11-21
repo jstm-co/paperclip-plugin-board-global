@@ -48,7 +48,9 @@ import {
   cx,
   openHref,
 } from "./common.js";
+import { t } from "../i18n.js";
 import { Icon } from "./icons.js";
+import { tx } from "./i18n.js";
 import { Layer, Popover, type ToastInput } from "./layer.js";
 
 // ---------------------------------------------------------------------------
@@ -88,13 +90,13 @@ export function markClass(mark: NewMark | undefined): string | false {
 
 export function MarkPill({ mark }: { mark: NewMark | undefined }) {
   if (!mark) return null;
-  if (mark.kind === "dup") return <span className="gb-cr-newpill is-dup">Ya existe</span>;
+  if (mark.kind === "dup") return <span className="gb-cr-newpill is-dup">{t("Ya existe")}</span>;
   return mark.outside ? (
-    <span className="gb-cr-newpill is-out" title="No calza con los filtros activos: se va al actualizar">
-      Nueva · fuera del filtro
+    <span className="gb-cr-newpill is-out" title={t("No calza con los filtros activos: se va al actualizar")}>
+      {t("Nueva · fuera del filtro")}
     </span>
   ) : (
-    <span className="gb-cr-newpill">Nueva</span>
+    <span className="gb-cr-newpill">{t("Nueva")}</span>
   );
 }
 
@@ -192,7 +194,7 @@ export function useCreateFlow({
       const problem = draftProblem(current.draft);
       if (problem === "company") return patch({ nudge: current.nudge + 1 });
       if (problem === "title") return;
-      if (problem === "assignee") return patch({ message: { kind: "error", text: "En curso necesita responsable" } });
+      if (problem === "assignee") return patch({ message: { kind: "error", text: t("En curso necesita responsable") } });
 
       const draft = current.draft;
       const request = buildCreateRequest(draft, { idempotencyKey: crypto.randomUUID(), allowDuplicate });
@@ -218,12 +220,12 @@ export function useCreateFlow({
               <b className="gb-mono" style={{ fontWeight: 500 }}>
                 {issue.identifier}
               </b>{" "}
-              creada en {STATUS_LABELS[issue.status]}
-              {agent && wakesAgent(draft) ? ` · ${agent} ya empezó` : ""}
-              {hiddenCompany ? " · no se ve con el filtro actual" : ""}
+              {t("creada en {status}", { status: STATUS_LABELS[issue.status] })}
+              {agent && wakesAgent(draft) ? t(" · {agent} ya empezó", { agent }) : ""}
+              {hiddenCompany ? t(" · no se ve con el filtro actual") : ""}
             </>
           ),
-          action: { label: "Abrir ↗", run: () => openHref(issueHref(idx, issue)) },
+          action: { label: t("Abrir ↗"), run: () => openHref(issueHref(idx, issue)) },
         });
         setSession((prev) => (prev ? { ...prev, draft: afterCreate(prev.draft, uid), sending: false, message: null } : prev));
         scrollToIssue(issue.id);
@@ -274,9 +276,7 @@ export function CreateSlot({ origin, groupLabel }: { origin: CreateOrigin; group
     ) : (
       <button type="button" className="gb-cr-addrow" data-cr onClick={() => api.open(origin)}>
         <Icon name="plus" size={14} />
-        <span>
-          Nueva tarea en <b>{groupLabel}</b>
-        </span>
+        <span>{tx("Nueva tarea en {group}", { group: <b>{groupLabel}</b> })}</span>
       </button>
     );
   }
@@ -286,7 +286,7 @@ export function CreateSlot({ origin, groupLabel }: { origin: CreateOrigin; group
     ) : (
       <button type="button" className="gb-cr-add is-sm" data-cr onClick={() => api.open(origin)}>
         <Icon name="plus" size={14} />
-        Crear
+        {t("Crear")}
       </button>
     );
   }
@@ -297,7 +297,7 @@ export function CreateSlot({ origin, groupLabel }: { origin: CreateOrigin; group
       ) : (
         <button type="button" className="gb-cr-add" data-cr onClick={() => api.open(origin)}>
           <Icon name="plus" size={14} />
-          Crear
+          {t("Crear")}
         </button>
       )}
     </div>
@@ -323,8 +323,8 @@ export function CreateHeadButton({ disabled }: { disabled: boolean }) {
         onClick={(event) => api.open(HEAD_ORIGIN, event.currentTarget)}
       >
         <Icon name="plus" size={14} />
-        <span className="gb-cr-long">Crear tarea</span>
-        <span className="gb-cr-short">Crear</span>
+        <span className="gb-cr-long">{t("Crear tarea")}</span>
+        <span className="gb-cr-short">{t("Crear")}</span>
       </button>
       {isOpen && api.session?.anchor ? <HeadPop anchor={api.session.anchor} /> : null}
     </>
@@ -341,7 +341,7 @@ function HeadPop({ anchor }: { anchor: HTMLElement }) {
   }, [anchor]);
   return (
     <Layer>
-      <div ref={ref} className="gb-cr-pop" data-cr role="dialog" aria-label="Crear tarea" style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}>
+      <div ref={ref} className="gb-cr-pop" data-cr role="dialog" aria-label={t("Crear tarea")} style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}>
         <Composer origin={HEAD_ORIGIN} />
       </div>
     </Layer>
@@ -354,7 +354,7 @@ function HeadPop({ anchor }: { anchor: HTMLElement }) {
 
 type MenuKind = "company" | "status" | "project" | "assignee" | "priority";
 
-const SOURCE_TITLE: Record<FromSource, string> = { filtro: "Puesto por el filtro", carril: "Puesto por el carril", grupo: "Puesto por el grupo" };
+const SOURCE_TITLE: Record<FromSource, string> = { filtro: t("Puesto por el filtro"), carril: t("Puesto por el carril"), grupo: t("Puesto por el grupo") };
 
 function Chip({
   menuOpen,
@@ -479,7 +479,7 @@ function Composer({ origin }: { origin: CreateOrigin }) {
     [index, draft.companyId],
   );
   const needsCompany = !draft.companyId;
-  const noCompanyTitle = "Elige primero la empresa";
+  const noCompanyTitle = t("Elige primero la empresa");
   const canSelf = !!userId;
   const inProgress = draft.status === "in_progress";
   const selfAssigned = draft.assignee?.kind === "user";
@@ -487,22 +487,22 @@ function Composer({ origin }: { origin: CreateOrigin }) {
   const assigneeChip =
     draft.assignee?.kind === "agent" ? (
       <>
-        <Avatar name={agent?.name ?? "Agente"} size={16} />
-        <span className="gb-cr-v">{agent?.name ?? "Agente"}</span>
+        <Avatar name={agent?.name ?? t("Agente")} size={16} />
+        <span className="gb-cr-v">{agent?.name ?? t("Agente")}</span>
       </>
     ) : draft.assignee?.kind === "user" ? (
       <>
-        <Avatar name="Yo" size={16} />
-        <span className="gb-cr-v">Yo</span>
+        <Avatar name={t("Yo")} size={16} />
+        <span className="gb-cr-v">{t("Yo")}</span>
       </>
     ) : (
       <>
         <Avatar name={null} size={16} />
-        <span className="gb-cr-v gb-muted">Sin responsable</span>
+        <span className="gb-cr-v gb-muted">{t("Sin responsable")}</span>
       </>
     );
 
-  const submitLabel = sending ? "Creando…" : wakes ? "Crear y asignar" : "Crear";
+  const submitLabel = sending ? t("Creando…") : wakes ? t("Crear y asignar") : t("Crear");
 
   return (
     <div
@@ -517,16 +517,16 @@ function Composer({ origin }: { origin: CreateOrigin }) {
         className="gb-cr-title"
         rows={2}
         value={draft.title}
-        placeholder="¿Qué hay que hacer?"
-        aria-label="Título de la tarea nueva"
+        placeholder={t("¿Qué hay que hacer?")}
+        aria-label={t("Título de la tarea nueva")}
         onChange={(event) => api.setTitle(event.target.value)}
         onKeyDown={onTitleKey}
       />
 
       {needsCompany ? (
         <div ref={companyRow} key={nudge} className={cx("gb-cr-corow", nudge > 0 && "is-nudge")}>
-          <span className="gb-cr-colabel">{nudge > 0 ? "⚠ Elige la empresa para crearla" : "¿En qué empresa?"}</span>
-          <div className="gb-cr-cos" role="radiogroup" aria-label="Empresa">
+          <span className="gb-cr-colabel">{nudge > 0 ? t("⚠ Elige la empresa para crearla") : t("¿En qué empresa?")}</span>
+          <div className="gb-cr-cos" role="radiogroup" aria-label={t("Empresa")}>
             {index.companies.map((c) => (
               <button
                 key={c.id}
@@ -549,13 +549,13 @@ function Composer({ origin }: { origin: CreateOrigin }) {
 
       <div className="gb-cr-chips">
         {company ? (
-          <Chip menuOpen={menu?.kind === "company"} from={draft.from.company} onOpen={openMenu("company")} title="Empresa">
+          <Chip menuOpen={menu?.kind === "company"} from={draft.from.company} onOpen={openMenu("company")} title={t("Empresa")}>
             <CompanyTag company={company} solid />
             {compact ? <span className="gb-sr">{company.name}</span> : <span className="gb-cr-v">{company.name}</span>}
           </Chip>
         ) : null}
         {showStatus ? (
-          <Chip menuOpen={menu?.kind === "status"} onOpen={openMenu("status")} title="Estado">
+          <Chip menuOpen={menu?.kind === "status"} onOpen={openMenu("status")} title={t("Estado")}>
             <StatusIcon status={draft.status} size={12} />
             <span className="gb-cr-v">{STATUS_LABELS[draft.status]}</span>
           </Chip>
@@ -564,26 +564,26 @@ function Composer({ origin }: { origin: CreateOrigin }) {
           menuOpen={menu?.kind === "project"}
           from={draft.from.project}
           disabled={needsCompany}
-          title={needsCompany ? noCompanyTitle : "Proyecto"}
+          title={needsCompany ? noCompanyTitle : t("Proyecto")}
           onOpen={openMenu("project")}
         >
           <Icon name="folder" size={12} />
-          <span className={cx("gb-cr-v", !project && "gb-muted")}>{project?.name ?? "Sin proyecto"}</span>
+          <span className={cx("gb-cr-v", !project && "gb-muted")}>{project?.name ?? t("Sin proyecto")}</span>
         </Chip>
         <Chip
           menuOpen={menu?.kind === "assignee"}
           className={cx(draft.assignee?.kind === "agent" && (wakes ? "is-agent" : "is-quiet"))}
           from={draft.from.assignee}
           disabled={needsCompany}
-          title={needsCompany ? noCompanyTitle : "Responsable"}
+          title={needsCompany ? noCompanyTitle : t("Responsable")}
           onOpen={openMenu("assignee")}
         >
           {assigneeChip}
         </Chip>
-        <Chip menuOpen={menu?.kind === "priority"} from={draft.from.priority} onOpen={openMenu("priority")} title="Prioridad">
+        <Chip menuOpen={menu?.kind === "priority"} from={draft.from.priority} onOpen={openMenu("priority")} title={t("Prioridad")}>
           <PriorityIcon priority={draft.priority} size={12} muted={draft.priority === "medium"} />
           {compact ? (
-            <span className="gb-sr">Prioridad: {PRIORITY_LABELS[draft.priority]}</span>
+            <span className="gb-sr">{t("Prioridad: {priority}", { priority: PRIORITY_LABELS[draft.priority] })}</span>
           ) : (
             <span className={cx("gb-cr-v", draft.priority === "medium" && "gb-muted")}>{PRIORITY_LABELS[draft.priority]}</span>
           )}
@@ -594,9 +594,9 @@ function Composer({ origin }: { origin: CreateOrigin }) {
         <div className="gb-cr-err" role="alert">
           <Icon name="circle-alert" size={14} />
           <span>
-            No se pudo crear: {message.text}. Tu texto sigue aquí.{" "}
+            {t("No se pudo crear: {error}. Tu texto sigue aquí.", { error: message.text })}{" "}
             <button type="button" className="gb-cr-lk" onClick={() => api.submit()}>
-              Reintentar
+              {t("Reintentar")}
             </button>
           </span>
         </div>
@@ -604,13 +604,16 @@ function Composer({ origin }: { origin: CreateOrigin }) {
         <div className="gb-cr-dup" role="note">
           <Icon name="circle-alert" size={14} />
           <span>
-            Ya existe <b className="gb-mono">{message.issue.identifier}</b> con este título en {index.companyById.get(message.issue.companyId)?.name ?? "la empresa"} (
-            {STATUS_LABELS[message.issue.status]}). No se creó otra.{" "}
+            {tx("Ya existe {id} con este título en {company} ({status}). No se creó otra.", {
+              id: <b className="gb-mono">{message.issue.identifier}</b>,
+              company: index.companyById.get(message.issue.companyId)?.name ?? t("la empresa"),
+              status: STATUS_LABELS[message.issue.status],
+            })}{" "}
             <a className="gb-cr-lk" href={issueHref(index, message.issue)}>
-              Abrir {message.issue.identifier}
+              {t("Abrir {id}", { id: message.issue.identifier ?? "" })}
             </a>{" "}
             <button type="button" className="gb-cr-lk" onClick={() => api.submit(true)}>
-              Crear igual
+              {t("Crear igual")}
             </button>
           </span>
         </div>
@@ -619,31 +622,31 @@ function Composer({ origin }: { origin: CreateOrigin }) {
           <Icon name={wakes ? "zap" : "clock"} size={12} />
           <span>
             {wakes ? (
-              <>
-                <b>{agent?.name}</b> empieza a trabajar apenas la crees.
-              </>
+              <>{tx("{agent} empieza a trabajar apenas la crees.", { agent: <b>{agent?.name}</b> })}</>
             ) : (
-              <>
-                Queda asignada a <b>{agent?.name}</b>. En Backlog no lo despierta: empieza al pasarla a Por hacer.
-              </>
+              <>{tx("Queda asignada a {agent}. En Backlog no lo despierta: empieza al pasarla a Por hacer.", { agent: <b>{agent?.name}</b> })}</>
             )}
-            {draft.from.assignee ? <span className="gb-muted"> Viene del {draft.from.assignee}.</span> : null}{" "}
+            {draft.from.assignee ? <span className="gb-muted"> {draft.from.assignee === "filtro" ? t("Viene del filtro.") : draft.from.assignee === "carril" ? t("Viene del carril.") : t("Viene del grupo.")}</span> : null}{" "}
             <button type="button" className="gb-cr-lk" onClick={() => api.edit((d) => withoutAgent(d, userId))}>
-              Quitar
+              {t("Quitar")}
             </button>
           </span>
         </div>
       ) : inProgress && selfAssigned ? (
         <div className="gb-cr-note" role="note">
           <Icon name="user" size={12} />
-          <span>En curso necesita responsable: quedas tú. No despierta a nadie.</span>
+          <span>{t("En curso necesita responsable: quedas tú. No despierta a nadie.")}</span>
         </div>
       ) : null}
 
       <div className="gb-cr-footrow">
         {origin.surface === "cell" ? null : (
           <span className="gb-cr-keys">
-            <kbd>Enter</kbd> crea · <kbd>Esc</kbd> {draft.title.trim() ? "descarta" : "cierra"}
+            {tx("{enter} crea · {esc} {action}", {
+              enter: <kbd>Enter</kbd>,
+              esc: <kbd>Esc</kbd>,
+              action: draft.title.trim() ? t("descarta") : t("cierra"),
+            })}
           </span>
         )}
         <button type="button" className={cx("gb-cr-go", sending && "is-busy")} disabled={sending} onClick={() => api.submit()}>
@@ -680,7 +683,7 @@ function Composer({ origin }: { origin: CreateOrigin }) {
                       <div className="gb-scroll">
                         <Pick on={!draft.projectId} onPick={() => pick((d) => ({ ...d, projectId: null, from: { ...d.from, project: undefined } }))}>
                           <Icon name="folder" size={14} />
-                          <span className="gb-lbl gb-muted">Sin proyecto</span>
+                          <span className="gb-lbl gb-muted">{t("Sin proyecto")}</span>
                         </Pick>
                         {projects.map((p) => (
                           <Pick key={p.id} on={p.id === draft.projectId} onPick={() => pick((d) => ({ ...d, projectId: p.id, from: { ...d.from, project: undefined } }))}>
@@ -708,7 +711,7 @@ function Composer({ origin }: { origin: CreateOrigin }) {
 }
 
 function menuLabel(kind: MenuKind): string {
-  return { company: "Empresa", status: "Estado", project: "Proyecto", assignee: "Responsable", priority: "Prioridad" }[kind];
+  return { company: t("Empresa"), status: t("Estado"), project: t("Proyecto"), assignee: t("Responsable"), priority: t("Prioridad") }[kind];
 }
 
 /** Menú de responsable (§5): «Sin responsable», «Yo», la nota de que despierta y los agentes. */
@@ -731,22 +734,22 @@ function AssigneeMenu({
 }) {
   return (
     <>
-      <Pick on={!current} disabled={inProgress} right={inProgress ? "no en En curso" : undefined} onPick={() => onPick(null)}>
+      <Pick on={!current} disabled={inProgress} right={inProgress ? t("no en En curso") : undefined} onPick={() => onPick(null)}>
         <Avatar name={null} size={18} />
-        <span className="gb-lbl">Sin responsable</span>
+        <span className="gb-lbl">{t("Sin responsable")}</span>
       </Pick>
       {canSelf ? (
-        <Pick on={current?.kind === "user"} right="no despierta a nadie" onPick={() => onPick({ kind: "user", id: userId! })}>
-          <Avatar name="Yo" size={18} />
-          <span className="gb-lbl">Yo</span>
+        <Pick on={current?.kind === "user"} right={t("no despierta a nadie")} onPick={() => onPick({ kind: "user", id: userId! })}>
+          <Avatar name={t("Yo")} size={18} />
+          <span className="gb-lbl">{t("Yo")}</span>
         </Pick>
       ) : null}
       <div className="gb-cr-mnote">
         <Icon name="zap" size={12} />
         <span>
           {wakesNote
-            ? "Asignar a un agente lo despierta: empieza a trabajar apenas se crea la tarea."
-            : "En Backlog, asignar a un agente no lo despierta: empieza cuando la tarea pasa a Por hacer."}
+            ? t("Asignar a un agente lo despierta: empieza a trabajar apenas se crea la tarea.")
+            : t("En Backlog, asignar a un agente no lo despierta: empieza cuando la tarea pasa a Por hacer.")}
         </span>
       </div>
       <div className="gb-scroll">

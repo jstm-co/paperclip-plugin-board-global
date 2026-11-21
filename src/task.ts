@@ -1,6 +1,7 @@
 // Modal de tarea (JST-408): lo que no depende de React.
 import { userLabel, type BoardIndex } from "./board.js";
 import type { IssueComment } from "./shared.js";
+import { t } from "./i18n.js";
 
 /** Comentarios que el modal pide de una vez; los anteriores quedan en la página de la tarea. */
 export const TASK_COMMENTS_LIMIT = 50;
@@ -23,13 +24,13 @@ export interface CommentAuthor {
 /** Quién escribió el comentario: la persona que mira, un agente, otra persona o el sistema. */
 export function commentAuthor(index: BoardIndex, comment: IssueComment, userId: string | null): CommentAuthor {
   if (comment.authorAgentId) {
-    return { name: index.agentById.get(comment.authorAgentId)?.name ?? "Agente desconocido", self: false, agent: true };
+    return { name: index.agentById.get(comment.authorAgentId)?.name ?? t("Agente desconocido"), self: false, agent: true };
   }
   if (comment.authorUserId) {
     const self = userId !== null && comment.authorUserId === userId;
-    return { name: self ? "Tú" : userLabel(comment.authorUserId), self, agent: false };
+    return { name: self ? t("Tú") : userLabel(comment.authorUserId), self, agent: false };
   }
-  return { name: "Sistema", self: false, agent: false };
+  return { name: t("Sistema"), self: false, agent: false };
 }
 
 /** Los comentarios que se muestran: sin borrados ni repetidos, del más nuevo al más antiguo. */

@@ -1,3 +1,4 @@
+import { t } from "../i18n.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { DATA_SAVED_VIEWS, VIEW_ACTIONS } from "../shared.js";
 import { applyViewOp, type SavedView, type ViewOp, type ViewOpResult } from "../views.js";
@@ -35,7 +36,7 @@ export function useSavedViews(companyId: string | null): SavedViews {
       const id = ++loadId.current;
       if (!silent) setStatus("loading");
       try {
-        if (!companyId) throw new Error("Sin empresa activa");
+        if (!companyId) throw new Error(t("Sin empresa activa"));
         const data = await getCompanyData<{ views: SavedView[] }>(DATA_SAVED_VIEWS, companyId);
         if (id !== loadId.current) return;
         setViews(data.views);
@@ -63,7 +64,7 @@ export function useSavedViews(companyId: string | null): SavedViews {
       // Sobre la lista de ahora (no la del primer intento, si es un «Reintentar»).
       setViews(applyViewOp(before, op).views);
       try {
-        if (!companyId) throw new Error("Sin empresa activa");
+        if (!companyId) throw new Error(t("Sin empresa activa"));
         const { op: kind, ...params } = op;
         const result = await runAction<ViewOpResult>(VIEW_ACTIONS[kind], companyId, params);
         setViews(result.views);

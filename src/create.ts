@@ -3,6 +3,7 @@
 // probarla sola. La UI está en `ui/create.tsx` y el POST en `ui/bridge.ts`.
 import { NO_PROJECT, type BoardFilters, type BoardIndex, type GroupBy } from "./board.js";
 import type { BoardIssue, IssuePriority, IssueStatus } from "./shared.js";
+import { t } from "./i18n.js";
 
 /**
  * Columnas con «+» (§1). Las demás necesitan contexto que un título no trae:
@@ -183,7 +184,7 @@ export interface CreateRequest {
 /** `POST /api/companies/:id/issues` (spike JST-334): la empresa y el estado salen de la columna. */
 export function buildCreateRequest(draft: CreateDraft, opts: { idempotencyKey: string; allowDuplicate?: boolean }): CreateRequest {
   const problem = draftProblem(draft);
-  if (problem || !draft.companyId) throw new Error(`Falta ${problem === "company" ? "la empresa" : problem === "title" ? "el título" : "el responsable"}`);
+  if (problem || !draft.companyId) throw new Error(problem === "company" ? t("Falta la empresa") : problem === "title" ? t("Falta el título") : t("Falta el responsable"));
   const body: CreateRequest["body"] = {
     title: normalizeTitle(draft.title),
     status: draft.status,

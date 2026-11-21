@@ -1,3 +1,4 @@
+import { t } from "../i18n.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { applyConfirmOp, parseConfirmations, type Confirmations } from "../confirm.js";
 import { CONFIRM_ACTIONS, DATA_CONFIRMATIONS } from "../shared.js";
@@ -46,7 +47,7 @@ export function useConfirmations(companyId: string | null): ConfirmationsApi {
   const mutate = useCallback(
     async (op: keyof typeof CONFIRM_ACTIONS, ids: readonly string[]) => {
       if (ids.length === 0) return;
-      if (!companyId) throw new Error("Sin empresa activa");
+      if (!companyId) throw new Error(t("Sin empresa activa"));
       // Una lectura en curso traería lo de antes del cambio.
       loadId.current += 1;
       inflight.current += 1;

@@ -13,6 +13,7 @@
 //   contadas por su estado actual.
 // - Actividad y tareas recientes: las 10 más nuevas.
 import { readList, readParams, userLabel, type BoardCompany } from "./board.js";
+import { msg, t } from "./i18n.js";
 import {
   isIssuePriority,
   isIssueStatus,
@@ -470,9 +471,9 @@ function activityRow(company: BoardCompany, data: CompanyDashboardData, event: A
   const agentName = (id: unknown) => data.agents.find((agent) => agent.id === id)?.name ?? null;
   const actor =
     event.actorType === "agent"
-      ? agentName(event.actorId) ?? "Agente desconocido"
+      ? agentName(event.actorId) ?? t("Agente desconocido")
       : event.actorType === "system"
-        ? "Sistema"
+        ? t("Sistema")
         : userLabel(event.actorId);
   let entityLabel: string | null = null;
   let entityTitle: string | null = null;
@@ -550,7 +551,7 @@ export function buildDashboard(loads: readonly CompanyDashboardLoad[], query: Da
     return {
       company: load.company,
       status: load.status,
-      error: load.status === "err" ? load.error ?? "Error desconocido" : null,
+      error: load.status === "err" ? load.error ?? t("Error desconocido") : null,
       metrics,
       monthUtilizationPercent: metrics ? utilizationPercent(metrics.monthSpendCents, metrics.monthBudgetCents) : null,
       dashboardHref: companyPath(load.company, "/dashboard"),
@@ -732,15 +733,28 @@ export function formatRate(rate: number): string {
   return `${Math.round(rate * 100)}%`;
 }
 
-const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"];
-const WEEKDAYS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+const MONTHS = [
+  msg("ene"),
+  msg("feb"),
+  msg("mar§mes"),
+  msg("abr"),
+  msg("may"),
+  msg("jun"),
+  msg("jul"),
+  msg("ago"),
+  msg("sept"),
+  msg("oct"),
+  msg("nov"),
+  msg("dic"),
+];
+const WEEKDAYS = [msg("dom"), msg("lun"), msg("mar§día"), msg("mié"), msg("jue"), msg("vie"), msg("sáb")];
 
 /** `2026-10-14` → `14 oct` o `mié 14 oct`. Son días UTC, como los de los gráficos. */
 export function dayLabel(date: string, withWeekday = false): string {
   const day = new Date(`${date}T12:00:00Z`);
   if (Number.isNaN(day.getTime())) return date;
-  const label = `${day.getUTCDate()} ${MONTHS[day.getUTCMonth()]}`;
-  return withWeekday ? `${WEEKDAYS[day.getUTCDay()]} ${label}` : label;
+  const label = `${day.getUTCDate()} ${t(MONTHS[day.getUTCMonth()]!)}`;
+  return withWeekday ? `${t(WEEKDAYS[day.getUTCDay()]!)} ${label}` : label;
 }
 
 /** Tiempo desde `iso`, para un run en curso: `9 min` o `1 h 5 min`. */
@@ -748,7 +762,9 @@ export function durationLabel(iso: string | null | undefined, now: number = Date
   const at = iso ? Date.parse(iso) : NaN;
   if (Number.isNaN(at)) return "";
   const minutes = Math.max(1, Math.round((now - at) / 60_000));
-  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+  return minutes < 60
+    ? t("{minutes} min", { minutes })
+    : t("{hours} h {minutes} min", { hours: Math.floor(minutes / 60), minutes: minutes % 60 });
 }
 
 // ---------------------------------------------------------------------------
@@ -757,86 +773,86 @@ export function durationLabel(iso: string | null | undefined, now: number = Date
 
 /** Los mismos eventos que nombra el Dashboard nativo, en español. */
 const ACTIVITY_VERBS: Record<string, string> = {
-  "issue.created": "creó",
-  "issue.updated": "actualizó",
-  "issue.deleted": "borró",
-  "issue.checked_out": "tomó",
-  "issue.released": "liberó",
-  "issue.comment_added": "comentó en",
-  "issue.commented": "comentó en",
-  "issue.comment_cancelled": "canceló un comentario en",
-  "issue.comment_deleted": "borró un comentario de",
-  "issue.attachment_added": "adjuntó un archivo a",
-  "issue.attachment_removed": "quitó un adjunto de",
-  "issue.document_created": "creó un documento en",
-  "issue.document_updated": "editó un documento de",
-  "issue.document_deleted": "borró un documento de",
-  "issue.document_locked": "bloqueó un documento de",
-  "issue.document_unlocked": "desbloqueó un documento de",
-  "issue.work_product_created": "entregó trabajo en",
-  "issue.work_product_updated": "actualizó el trabajo de",
-  "issue.work_product_deleted": "quitó trabajo de",
-  "issue.read_marked": "marcó como leída",
-  "issue.read_unmarked": "marcó como no leída",
-  "issue.inbox_archived": "archivó del Inbox",
-  "issue.inbox_unarchived": "devolvió al Inbox",
-  "issue.blockers_updated": "cambió los bloqueadores de",
-  "issue.blockers_resolved_wake_emitted": "despertó al responsable de",
-  "issue.reviewers_updated": "cambió los revisores de",
-  "issue.approvers_updated": "cambió los aprobadores de",
-  "issue.cross_issue_influence_observed": "escribió en otra tarea desde",
-  "issue.monitor_scheduled": "programó un monitor en",
-  "issue.monitor_triggered": "disparó el monitor de",
-  "issue.monitor_cleared": "quitó el monitor de",
-  "issue.thread_interaction_created": "pidió una decisión en",
-  "issue.thread_interaction_accepted": "aceptó la solicitud de",
-  "issue.thread_interaction_rejected": "rechazó la solicitud de",
-  "issue.thread_interaction_answered": "respondió la solicitud de",
-  "issue.thread_interaction_withdrawn": "retiró la solicitud de",
-  "issue.thread_interaction_cancelled": "canceló la solicitud de",
-  "issue.thread_interaction_expired": "dio por vencida la solicitud de",
-  "issue.successful_run_handoff_required": "marcó sin siguiente paso a",
-  "issue.successful_run_handoff_resolved": "eligió el siguiente paso de",
-  "issue.successful_run_handoff_escalated": "escaló la falta de siguiente paso de",
-  "issue.recovery_action_opened": "abrió una recuperación en",
-  "issue.recovery_action_resolved": "resolvió la recuperación de",
-  "issue.recovery_action_escalated": "escaló la recuperación de",
-  "issue.stale_lock_cleared": "liberó un bloqueo vencido de",
-  "agent.created": "contrató a",
-  "agent.updated": "actualizó a",
-  "agent.paused": "pausó a",
-  "agent.resumed": "reanudó a",
-  "agent.terminated": "dio de baja a",
-  "agent.error_cleared": "limpió el error de",
-  "agent.budget_updated": "cambió el presupuesto de",
-  "agent.skills_synced": "sincronizó las skills de",
-  "heartbeat.invoked": "invocó un heartbeat de",
-  "heartbeat.cancelled": "canceló un heartbeat de",
-  "approval.created": "pidió una aprobación",
-  "approval.approved": "aprobó una solicitud",
-  "approval.rejected": "rechazó una solicitud",
-  "project.created": "creó el proyecto",
-  "project.updated": "actualizó el proyecto",
-  "project.deleted": "borró el proyecto",
-  "project.workspace_created": "creó un workspace en",
-  "goal.created": "creó una meta",
-  "goal.updated": "actualizó una meta",
-  "goal.deleted": "borró una meta",
-  "label.created": "creó una etiqueta",
-  "label.deleted": "borró una etiqueta",
-  "plugin.installed": "instaló un plugin",
-  "plugin.upgraded": "actualizó un plugin",
-  "plugin.uninstalled": "desinstaló un plugin",
-  "plugin.enabled": "activó un plugin",
-  "plugin.disabled": "desactivó un plugin",
-  "environment.lease_acquired": "tomó un entorno",
-  "environment.lease_released": "liberó un entorno",
-  "routine.run_triggered": "lanzó una rutina",
-  "decision_queue_item.seeded": "agregó una decisión pendiente",
-  "cost.reported": "reportó un costo de",
-  "cost.recorded": "registró un costo de",
-  "company.updated": "actualizó la empresa",
-  "company.budget_updated": "cambió el presupuesto de la empresa",
+  "issue.created": msg("creó"),
+  "issue.updated": msg("actualizó"),
+  "issue.deleted": msg("borró"),
+  "issue.checked_out": msg("tomó"),
+  "issue.released": msg("liberó"),
+  "issue.comment_added": msg("comentó en"),
+  "issue.commented": msg("comentó en"),
+  "issue.comment_cancelled": msg("canceló un comentario en"),
+  "issue.comment_deleted": msg("borró un comentario de"),
+  "issue.attachment_added": msg("adjuntó un archivo a"),
+  "issue.attachment_removed": msg("quitó un adjunto de"),
+  "issue.document_created": msg("creó un documento en"),
+  "issue.document_updated": msg("editó un documento de"),
+  "issue.document_deleted": msg("borró un documento de"),
+  "issue.document_locked": msg("bloqueó un documento de"),
+  "issue.document_unlocked": msg("desbloqueó un documento de"),
+  "issue.work_product_created": msg("entregó trabajo en"),
+  "issue.work_product_updated": msg("actualizó el trabajo de"),
+  "issue.work_product_deleted": msg("quitó trabajo de"),
+  "issue.read_marked": msg("marcó como leída"),
+  "issue.read_unmarked": msg("marcó como no leída"),
+  "issue.inbox_archived": msg("archivó del Inbox"),
+  "issue.inbox_unarchived": msg("devolvió al Inbox"),
+  "issue.blockers_updated": msg("cambió los bloqueadores de"),
+  "issue.blockers_resolved_wake_emitted": msg("despertó al responsable de"),
+  "issue.reviewers_updated": msg("cambió los revisores de"),
+  "issue.approvers_updated": msg("cambió los aprobadores de"),
+  "issue.cross_issue_influence_observed": msg("escribió en otra tarea desde"),
+  "issue.monitor_scheduled": msg("programó un monitor en"),
+  "issue.monitor_triggered": msg("disparó el monitor de"),
+  "issue.monitor_cleared": msg("quitó el monitor de"),
+  "issue.thread_interaction_created": msg("pidió una decisión en"),
+  "issue.thread_interaction_accepted": msg("aceptó la solicitud de"),
+  "issue.thread_interaction_rejected": msg("rechazó la solicitud de"),
+  "issue.thread_interaction_answered": msg("respondió la solicitud de"),
+  "issue.thread_interaction_withdrawn": msg("retiró la solicitud de"),
+  "issue.thread_interaction_cancelled": msg("canceló la solicitud de"),
+  "issue.thread_interaction_expired": msg("dio por vencida la solicitud de"),
+  "issue.successful_run_handoff_required": msg("marcó sin siguiente paso a"),
+  "issue.successful_run_handoff_resolved": msg("eligió el siguiente paso de"),
+  "issue.successful_run_handoff_escalated": msg("escaló la falta de siguiente paso de"),
+  "issue.recovery_action_opened": msg("abrió una recuperación en"),
+  "issue.recovery_action_resolved": msg("resolvió la recuperación de"),
+  "issue.recovery_action_escalated": msg("escaló la recuperación de"),
+  "issue.stale_lock_cleared": msg("liberó un bloqueo vencido de"),
+  "agent.created": msg("contrató a"),
+  "agent.updated": msg("actualizó a"),
+  "agent.paused": msg("pausó a"),
+  "agent.resumed": msg("reanudó a"),
+  "agent.terminated": msg("dio de baja a"),
+  "agent.error_cleared": msg("limpió el error de"),
+  "agent.budget_updated": msg("cambió el presupuesto de"),
+  "agent.skills_synced": msg("sincronizó las skills de"),
+  "heartbeat.invoked": msg("invocó un heartbeat de"),
+  "heartbeat.cancelled": msg("canceló un heartbeat de"),
+  "approval.created": msg("pidió una aprobación"),
+  "approval.approved": msg("aprobó una solicitud"),
+  "approval.rejected": msg("rechazó una solicitud"),
+  "project.created": msg("creó el proyecto"),
+  "project.updated": msg("actualizó el proyecto"),
+  "project.deleted": msg("borró el proyecto"),
+  "project.workspace_created": msg("creó un workspace en"),
+  "goal.created": msg("creó una meta"),
+  "goal.updated": msg("actualizó una meta"),
+  "goal.deleted": msg("borró una meta"),
+  "label.created": msg("creó una etiqueta"),
+  "label.deleted": msg("borró una etiqueta"),
+  "plugin.installed": msg("instaló un plugin"),
+  "plugin.upgraded": msg("actualizó un plugin"),
+  "plugin.uninstalled": msg("desinstaló un plugin"),
+  "plugin.enabled": msg("activó un plugin"),
+  "plugin.disabled": msg("desactivó un plugin"),
+  "environment.lease_acquired": msg("tomó un entorno"),
+  "environment.lease_released": msg("liberó un entorno"),
+  "routine.run_triggered": msg("lanzó una rutina"),
+  "decision_queue_item.seeded": msg("agregó una decisión pendiente"),
+  "cost.reported": msg("reportó un costo de"),
+  "cost.recorded": msg("registró un costo de"),
+  "company.updated": msg("actualizó la empresa"),
+  "company.budget_updated": msg("cambió el presupuesto de la empresa"),
 };
 
 /**
@@ -850,9 +866,12 @@ export function activityVerb(
   labels: { status: Record<IssueStatus, string>; priority: Record<IssuePriority, string> },
 ): string {
   if (action === "issue.updated" && details) {
-    if (isIssueStatus(details.status)) return `cambió el estado a ${labels.status[details.status]} de`;
-    if (isIssuePriority(details.priority)) return `cambió la prioridad a ${labels.priority[details.priority].toLowerCase()} de`;
-    if (details.assigneeAgentId !== undefined || details.assigneeUserId !== undefined) return "cambió el responsable de";
+    if (isIssueStatus(details.status)) return t("cambió el estado a {status} de", { status: labels.status[details.status] });
+    if (isIssuePriority(details.priority)) {
+      return t("cambió la prioridad a {priority} de", { priority: labels.priority[details.priority].toLowerCase() });
+    }
+    if (details.assigneeAgentId !== undefined || details.assigneeUserId !== undefined) return t("cambió el responsable de");
   }
-  return ACTIVITY_VERBS[action] ?? action.replace(/[._]/g, " ");
+  const verb = ACTIVITY_VERBS[action];
+  return verb ? t(verb) : action.replace(/[._]/g, " ");
 }
