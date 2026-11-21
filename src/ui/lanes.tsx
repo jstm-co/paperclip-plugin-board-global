@@ -32,8 +32,12 @@ import { Layer } from "./layer.js";
 const PER_CELL = 2;
 const PER_CELL_FLAT = 6;
 const MORE_STEP = 20;
-/** Ancho mínimo de una columna: por debajo, el board se desplaza hacia el lado. */
-const MIN_COL = 216;
+/**
+ * Ancho mínimo de una columna: por debajo, el board se desplaza hacia el lado.
+ * Con «Por confirmar» son cinco columnas, y a 200 px caben sin scroll lateral
+ * en una pantalla de 1440 px con el menú de Paperclip abierto.
+ */
+const MIN_COL = 200;
 const COL_GAP = 10;
 
 export const COLUMN_LABELS: Record<BoardColumn, string> = { ...STATUS_LABELS, [CONFIRM_COLUMN]: "Por confirmar" };

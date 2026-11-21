@@ -261,7 +261,9 @@ svg.gb-i.gb-s14 { width: 14px; height: 14px; } svg.gb-i.gb-s12 { width: 12px; he
 .gb-card .gb-ctxrow:empty { display: none; }
 .gb-prjchip { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 4px; background: var(--gb-muted); font-size: 11px; line-height: 18px; color: var(--gb-muted-fg); min-width: 0; max-width: 100%; }
 .gb-prjchip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gb-card .gb-foot { display: flex; align-items: center; gap: 6px; margin-top: 8px; min-height: 20px; min-width: 0; }
+/* El pie baja de línea antes que salirse de la tarjeta: en «Por confirmar» suma el estado de cierre y no cabe en una columna angosta. */
+.gb-card .gb-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 8px; min-height: 20px; min-width: 0; }
+.gb-card .gb-foot .gb-avatar { margin-left: auto; }
 .gb-cosq { width: 10px; height: 10px; border-radius: 3px; background: var(--cc); flex: none; display: inline-block; }
 .gb-card .gb-id { font: 500 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--gb-muted-fg); white-space: nowrap; }
 .gb-subn { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: 11.5px; color: var(--gb-muted-fg); white-space: nowrap; }
