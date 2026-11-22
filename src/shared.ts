@@ -105,6 +105,8 @@ export interface BoardProject {
 export interface BoardAgent {
   id: string;
   name: string;
+  /** Estado del agente (`active`, `paused`, `terminated`, `pending_approval`…); el menú de responsable (JST-429) lo usa para ocultar los terminados. */
+  status?: string;
 }
 
 /** Respuesta del worker para una empresa. */

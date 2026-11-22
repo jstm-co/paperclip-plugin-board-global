@@ -204,14 +204,12 @@ export function serializeBoardQuery(query: BoardQuery): string {
 // «Te toca»: tareas que esperan una respuesta del usuario (feed del Inbox)
 // ---------------------------------------------------------------------------
 
-export type WaitKind = "pregunta" | "confirmacion" | "aprobacion" | "desbloqueo" | "otro";
+export type WaitKind = "pregunta" | "confirmacion" | "aprobacion";
 
 export const WAIT_LABELS: Record<WaitKind, string> = {
   pregunta: t("Responder pregunta"),
   confirmacion: t("Confirmar"),
   aprobacion: t("Aprobar"),
-  desbloqueo: t("Desbloquear"),
-  otro: t("Atender"),
 };
 
 export interface Waiting {
@@ -223,10 +221,13 @@ export interface Waiting {
   href: string | null;
 }
 
-function waitKind(item: AttentionItem): WaitKind {
+/**
+ * Solo cuenta lo que espera una respuesta del usuario: una tarjeta del hilo,
+ * una aprobación, una revisión o una decisión. Cualquier otro ítem del feed
+ * (por ejemplo `blocker_attention`) devuelve `null` y no enciende «Te toca».
+ */
+function waitKind(item: AttentionItem): WaitKind | null {
   switch (item.sourceKind) {
-    case "blocker_attention":
-      return "desbloqueo";
     case "approval":
     case "review":
       return "aprobacion";
@@ -235,19 +236,11 @@ function waitKind(item: AttentionItem): WaitKind {
     case "issue_thread_interaction":
       return item.subject?.metadata?.kind === "ask_user_questions" ? "pregunta" : "confirmacion";
     default:
-      return "otro";
+      return null;
   }
 }
 
 function waitWhat(item: AttentionItem, kind: WaitKind): string {
-  if (kind === "desbloqueo") {
-    const blocked = item.detail?.blockedTaskCount ?? 0;
-    return blocked > 0
-      ? blocked === 1
-        ? t("Bloquea {n} tarea y necesita tu atención", { n: blocked })
-        : t("Bloquea {n} tareas y necesita tu atención", { n: blocked })
-      : t("Necesita tu atención para destrabarse");
-  }
   // Si el sujeto es la propia tarea, su título no dice qué se pide.
   const title = item.subject?.kind !== "issue" ? item.subject?.title?.trim() : "";
   return title || WAIT_LABELS[kind];
@@ -260,6 +253,7 @@ export function waitingFromAttention(items: readonly AttentionItem[]): Map<strin
     const issueId = item.relatedIssue?.id;
     if (!issueId || waiting.has(issueId)) continue;
     const kind = waitKind(item);
+    if (!kind) continue;
     waiting.set(issueId, {
       kind,
       what: waitWhat(item, kind),
@@ -268,6 +262,27 @@ export function waitingFromAttention(items: readonly AttentionItem[]): Map<strin
     });
   }
   return waiting;
+}
+
+/**
+ * Tarea parada: bloqueada sin nada vivo que la destrabe (`blocker_attention`).
+ * No espera al usuario, así que no entra en «Te toca». Se guarda aparte y solo
+ * se muestra en la bandeja «Paradas» (JST-424); ninguna tarjeta ni fila lleva marca.
+ */
+export interface Stalled {
+  /** Cuántas tareas bloquea. */
+  blockedTaskCount: number;
+  since: string | null;
+}
+
+export function stalledFromAttention(items: readonly AttentionItem[]): Map<string, Stalled> {
+  const stalled = new Map<string, Stalled>();
+  for (const item of items) {
+    const issueId = item.relatedIssue?.id;
+    if (item.sourceKind !== "blocker_attention" || !issueId || stalled.has(issueId)) continue;
+    stalled.set(issueId, { blockedTaskCount: item.detail?.blockedTaskCount ?? 0, since: item.createdAt ?? null });
+  }
+  return stalled;
 }
 
 // ---------------------------------------------------------------------------
@@ -308,8 +323,10 @@ export interface BoardIndex {
   kids: Map<string, BoardIssue[]>;
   companyById: Map<string, BoardCompany>;
   projectById: Map<string, { id: string; name: string; color: string | null; companyId: string }>;
-  agentById: Map<string, { id: string; name: string; companyId: string }>;
+  agentById: Map<string, { id: string; name: string; companyId: string; status?: string }>;
   waiting: Map<string, Waiting>;
+  /** Tareas paradas (`blocker_attention`): no son «Te toca». Solo las usa la bandeja «Paradas». */
+  stalled: Map<string, Stalled>;
   /** Alguna empresa devolvió el feed del Inbox. Si no, «Te toca» no está disponible (§4.4). */
   tocaAvailable: boolean;
   /** Tareas recién creadas (JST-333): van primeras en su grupo hasta que se actualiza el board. */
@@ -345,6 +362,7 @@ export function buildBoardIndex(
     projectById: new Map(),
     agentById: new Map(),
     waiting: new Map(),
+    stalled: new Map(),
     tocaAvailable: boards.some((board) => board.attention !== null),
   };
   for (const board of sorted) {
@@ -364,6 +382,7 @@ export function buildBoardIndex(
       index.byId.set(issue.id, issue);
     }
     for (const [issueId, waiting] of waitingFromAttention(board.attention ?? [])) index.waiting.set(issueId, waiting);
+    for (const [issueId, stalled] of stalledFromAttention(board.attention ?? [])) index.stalled.set(issueId, stalled);
   }
   for (const issue of index.issues) {
     if (!issue.parentId || !index.byId.has(issue.parentId)) continue;
@@ -372,6 +391,7 @@ export function buildBoardIndex(
     else index.kids.set(issue.parentId, [issue]);
   }
   for (const issueId of [...index.waiting.keys()]) if (!index.byId.has(issueId)) index.waiting.delete(issueId);
+  for (const issueId of [...index.stalled.keys()]) if (!index.byId.has(issueId)) index.stalled.delete(issueId);
   return index;
 }
 
@@ -405,6 +425,68 @@ export function issueHref(index: BoardIndex, issue: BoardIssue): string {
 
 export function compareIdentifiers(a: BoardIssue, b: BoardIssue): number {
   return (a.identifier ?? a.id).localeCompare(b.identifier ?? b.id, "es", { numeric: true });
+}
+
+// ---------------------------------------------------------------------------
+// Bandeja «Paradas» (JST-424)
+// ---------------------------------------------------------------------------
+
+export interface StalledRow {
+  issue: BoardIssue;
+  blockedTaskCount: number;
+  /** Primer bloqueador que sigue abierto, si lo hay. */
+  waitsOn: BoardIssue | null;
+}
+
+export interface StalledGroup {
+  company: BoardCompany;
+  rows: StalledRow[];
+}
+
+/**
+ * Las paradas abiertas, por empresa (en el orden del índice) y de la que más
+ * tareas frena a la que menos; a igual número, la más antigua primero. Solo
+ * respeta el filtro de empresas (`emp`, por prefijo): ni la búsqueda ni los
+ * demás filtros las esconden, y las cerradas no cuentan aunque el feed las traiga.
+ */
+export function stalledGroups(index: BoardIndex, emp: readonly string[] = []): StalledGroup[] {
+  const groups: StalledGroup[] = [];
+  for (const company of index.companies) {
+    if (emp.length > 0 && !emp.includes(company.prefix)) continue;
+    const rows: StalledRow[] = [];
+    for (const [issueId, stalled] of index.stalled) {
+      const issue = index.byId.get(issueId);
+      if (!issue || issue.companyId !== company.id || !isOpenStatus(issue.status)) continue;
+      const waitsOn = issue.blockerIds.map((id) => index.byId.get(id)).find((blocker) => blocker && isOpenStatus(blocker.status)) ?? null;
+      rows.push({ issue, blockedTaskCount: stalled.blockedTaskCount, waitsOn });
+    }
+    if (rows.length === 0) continue;
+    rows.sort((a, b) => b.blockedTaskCount - a.blockedTaskCount || a.issue.updatedAt.localeCompare(b.issue.updatedAt));
+    groups.push({ company, rows });
+  }
+  return groups;
+}
+
+export function stalledCount(groups: readonly StalledGroup[]): number {
+  return groups.reduce((total, group) => total + group.rows.length, 0);
+}
+
+/** Tareas abiertas que esta frena, directa o por la cadena de bloqueos. */
+export function blockedBy(index: BoardIndex, issue: BoardIssue): BoardIssue[] {
+  const out: BoardIssue[] = [];
+  const seen = new Set([issue.id]);
+  const queue = [issue.id];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    for (const other of index.issues) {
+      if (seen.has(other.id) || !other.blockerIds.includes(id)) continue;
+      seen.add(other.id);
+      if (!isOpenStatus(other.status)) continue;
+      out.push(other);
+      queue.push(other.id);
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
