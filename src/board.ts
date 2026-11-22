@@ -266,8 +266,8 @@ export function waitingFromAttention(items: readonly AttentionItem[]): Map<strin
 
 /**
  * Tarea parada: bloqueada sin nada vivo que la destrabe (`blocker_attention`).
- * No espera al usuario, así que no entra en «Te toca». Se guarda aparte por si
- * Diseño decide mostrarla; hoy no se pinta en ninguna vista.
+ * No espera al usuario, así que no entra en «Te toca». Se guarda aparte y solo
+ * se muestra en la bandeja «Paradas» (JST-424); ninguna tarjeta ni fila lleva marca.
  */
 export interface Stalled {
   /** Cuántas tareas bloquea. */
@@ -325,7 +325,7 @@ export interface BoardIndex {
   projectById: Map<string, { id: string; name: string; color: string | null; companyId: string }>;
   agentById: Map<string, { id: string; name: string; companyId: string }>;
   waiting: Map<string, Waiting>;
-  /** Tareas paradas (`blocker_attention`): no son «Te toca». Sin uso en la interfaz por ahora. */
+  /** Tareas paradas (`blocker_attention`): no son «Te toca». Solo las usa la bandeja «Paradas». */
   stalled: Map<string, Stalled>;
   /** Alguna empresa devolvió el feed del Inbox. Si no, «Te toca» no está disponible (§4.4). */
   tocaAvailable: boolean;
@@ -425,6 +425,68 @@ export function issueHref(index: BoardIndex, issue: BoardIssue): string {
 
 export function compareIdentifiers(a: BoardIssue, b: BoardIssue): number {
   return (a.identifier ?? a.id).localeCompare(b.identifier ?? b.id, "es", { numeric: true });
+}
+
+// ---------------------------------------------------------------------------
+// Bandeja «Paradas» (JST-424)
+// ---------------------------------------------------------------------------
+
+export interface StalledRow {
+  issue: BoardIssue;
+  blockedTaskCount: number;
+  /** Primer bloqueador que sigue abierto, si lo hay. */
+  waitsOn: BoardIssue | null;
+}
+
+export interface StalledGroup {
+  company: BoardCompany;
+  rows: StalledRow[];
+}
+
+/**
+ * Las paradas abiertas, por empresa (en el orden del índice) y de la que más
+ * tareas frena a la que menos; a igual número, la más antigua primero. Solo
+ * respeta el filtro de empresas (`emp`, por prefijo): ni la búsqueda ni los
+ * demás filtros las esconden, y las cerradas no cuentan aunque el feed las traiga.
+ */
+export function stalledGroups(index: BoardIndex, emp: readonly string[] = []): StalledGroup[] {
+  const groups: StalledGroup[] = [];
+  for (const company of index.companies) {
+    if (emp.length > 0 && !emp.includes(company.prefix)) continue;
+    const rows: StalledRow[] = [];
+    for (const [issueId, stalled] of index.stalled) {
+      const issue = index.byId.get(issueId);
+      if (!issue || issue.companyId !== company.id || !isOpenStatus(issue.status)) continue;
+      const waitsOn = issue.blockerIds.map((id) => index.byId.get(id)).find((blocker) => blocker && isOpenStatus(blocker.status)) ?? null;
+      rows.push({ issue, blockedTaskCount: stalled.blockedTaskCount, waitsOn });
+    }
+    if (rows.length === 0) continue;
+    rows.sort((a, b) => b.blockedTaskCount - a.blockedTaskCount || a.issue.updatedAt.localeCompare(b.issue.updatedAt));
+    groups.push({ company, rows });
+  }
+  return groups;
+}
+
+export function stalledCount(groups: readonly StalledGroup[]): number {
+  return groups.reduce((total, group) => total + group.rows.length, 0);
+}
+
+/** Tareas abiertas que esta frena, directa o por la cadena de bloqueos. */
+export function blockedBy(index: BoardIndex, issue: BoardIssue): BoardIssue[] {
+  const out: BoardIssue[] = [];
+  const seen = new Set([issue.id]);
+  const queue = [issue.id];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    for (const other of index.issues) {
+      if (seen.has(other.id) || !other.blockerIds.includes(id)) continue;
+      seen.add(other.id);
+      if (!isOpenStatus(other.status)) continue;
+      out.push(other);
+      queue.push(other.id);
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
