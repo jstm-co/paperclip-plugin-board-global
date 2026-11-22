@@ -40,6 +40,7 @@
 // leída (`POST /api/issues/:id/read`), igual que la página nativa de la tarea.
 import type { CreateRequest, CreatedIssue } from "../create.js";
 import { getLocale } from "../i18n.js";
+import { assignBody, type AssignTarget } from "../task.js";
 import {
   OPEN_STATUSES,
   PLUGIN_KEY,
@@ -121,7 +122,7 @@ export async function listProjects(companyId: string): Promise<BoardProject[]> {
 
 export async function listAgents(companyId: string): Promise<BoardAgent[]> {
   const agents = await request<Array<BoardAgent>>(`/companies/${encodeURIComponent(companyId)}/agents`);
-  return agents.map((agent) => ({ id: agent.id, name: agent.name }));
+  return agents.map((agent) => ({ id: agent.id, name: agent.name, ...(typeof agent.status === "string" ? { status: agent.status } : {}) }));
 }
 
 export async function listAttention(companyId: string): Promise<AttentionItem[]> {
@@ -193,6 +194,14 @@ export function updateIssueStatus(issueId: string, status: IssueStatus): Promise
   return request(`/issues/${encodeURIComponent(issueId)}`, {
     method: "PATCH",
     body: JSON.stringify({ status }),
+  });
+}
+
+/** Reasigna con la sesión del usuario, como `updateIssueStatus` (JST-429). El cuerpo sale de `assignBody`. */
+export function updateIssueAssignee(issueId: string, target: AssignTarget): Promise<{ id: string; assigneeAgentId?: string | null; assigneeUserId?: string | null }> {
+  return request(`/issues/${encodeURIComponent(issueId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(assignBody(target)),
   });
 }
 

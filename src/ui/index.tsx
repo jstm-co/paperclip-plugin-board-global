@@ -46,6 +46,7 @@ import { EmptyPedidos, PedidosView } from "./pedidos.js";
 import { EmptyResults, LoadFailed, PartialErrorBanner, TocaBanner } from "./states.js";
 import { ensureStyles } from "./styles.js";
 import { TaskModal } from "./task.js";
+import { isAssignedTo, type AssignTarget } from "../task.js";
 import { useBoardData } from "./useBoardData.js";
 import { useConfirmations } from "./useConfirmations.js";
 import { useLiveRuns } from "./usePedidos.js";
@@ -414,6 +415,33 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
       });
     }
   };
+  // Reasignar desde el modal (JST-429): igual que `move`, al instante y con aviso si la API falla.
+  const assign = async (issue: BoardIssue, to: AssignTarget) => {
+    if (isAssignedTo(issue, to)) return;
+    const label = issue.identifier ?? t("la tarea");
+    const from = { assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId };
+    try {
+      await data.assignIssue(issue.id, from, to);
+      toast({
+        content: (
+          <>
+            {tx("{id} asignada a {who}", {
+              id: (
+                <b className="gb-mono" style={{ fontWeight: 500 }}>
+                  {label}
+                </b>
+              ),
+              who: to.kind === "none" ? t("nadie") : to.kind === "user" ? t("ti") : (index?.agentById.get(to.id)?.name ?? t("Agente")),
+            })}
+          </>
+        ),
+      });
+      // «Te toca» sale del Inbox: se vuelve a pedir para que refleje el cambio.
+      void refreshCompany(issue.companyId);
+    } catch (err) {
+      toast({ error: true, content: t("No se pudo cambiar el responsable de {task}: {message}", { task: label, message: (err as Error).message }) });
+    }
+  };
   const onDrop = (status: IssueStatus) => {
     const issue = dragging;
     setDragging(null);
@@ -563,6 +591,7 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
           onClose={closeTask}
           onOpen={openTask}
           onMove={(issue, to) => void move(issue, issue.status, to, false)}
+          onAssign={assign}
           onConfirm={onConfirm}
           onCommented={(issue) => void refreshCompany(issue.companyId)}
         />

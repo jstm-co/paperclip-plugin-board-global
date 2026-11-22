@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildBoardIndex, companyPaletteKeys, withBlockedBy, type BoardIndex } from "../board.js";
 import { insertIssue } from "../create.js";
+import { withAssignee, type AssignTarget } from "../task.js";
 import { DATA_COMPANY_ISSUES, isOpenStatus, type BoardIssue, type CompanyBoard, type CompanyIssues, type IssueStatus } from "../shared.js";
 import {
   getCompanyData,
@@ -9,6 +10,7 @@ import {
   listCompanies,
   listOpenBlockedBy,
   listProjects,
+  updateIssueAssignee,
   updateIssueStatus,
   type CompanyRef,
 } from "./bridge.js";
@@ -63,6 +65,25 @@ function setStatus(loads: Record<string, CompanyLoad>, issueId: string, status: 
         issues: load.board.issues.map((issue) =>
           // `closedAt` acompaña al estado: «Por confirmar» (JST-407) compara contra esa hora.
           issue.id === issueId ? { ...issue, status, updatedAt: at, closedAt: isOpenStatus(status) ? null : at } : issue,
+        ),
+      },
+    };
+  }
+  return next;
+}
+
+/** Cambia el responsable de una tarea en el estado local (JST-429), sin tocar nada más. */
+function setAssignee(loads: Record<string, CompanyLoad>, issueId: string, assignee: Pick<BoardIssue, "assigneeAgentId" | "assigneeUserId">): Record<string, CompanyLoad> {
+  const next = { ...loads };
+  const at = new Date().toISOString();
+  for (const [companyId, load] of Object.entries(loads)) {
+    if (!load.board?.issues.some((issue) => issue.id === issueId)) continue;
+    next[companyId] = {
+      ...load,
+      board: {
+        ...load.board,
+        issues: load.board.issues.map((issue) =>
+          issue.id === issueId ? { ...issue, assigneeAgentId: assignee.assigneeAgentId, assigneeUserId: assignee.assigneeUserId, updatedAt: at } : issue,
         ),
       },
     };
@@ -184,6 +205,20 @@ export function useBoardData() {
     }
   }, []);
 
+  /**
+   * Reasigna la tarea al instante (JST-429), como `moveIssue`: si la API falla,
+   * vuelve al responsable anterior (`from`) y el error se propaga.
+   */
+  const assignIssue = useCallback(async (issueId: string, from: Pick<BoardIssue, "assigneeAgentId" | "assigneeUserId">, to: AssignTarget) => {
+    setLoads((prev) => setAssignee(prev, issueId, withAssignee(from, to)));
+    try {
+      await updateIssueAssignee(issueId, to);
+    } catch (err) {
+      setLoads((prev) => setAssignee(prev, issueId, from));
+      throw err;
+    }
+  }, []);
+
   const boards = useMemo(
     () => Object.values(loads).flatMap((load) => (load.status === "ok" && load.board ? [load.board] : [])),
     [loads],
@@ -195,5 +230,5 @@ export function useBoardData() {
   );
   const failed = useMemo(() => Object.values(loads).filter((load) => load.status === "err"), [loads]);
 
-  return { companies, loads, index, failed, ready, refreshing, listError, loadedAt, refresh, retry, addIssue, moveIssue };
+  return { companies, loads, index, failed, ready, refreshing, listError, loadedAt, refresh, retry, addIssue, moveIssue, assignIssue };
 }

@@ -7,7 +7,7 @@ import { MarkdownBlock } from "@paperclipai/plugin-sdk/ui";
 import { ancestorsOf, childrenOf, progressOf, projectLabel, relativeTime, sortSubtasks, type BoardIndex } from "../board.js";
 import { localeTag, t } from "../i18n.js";
 import { ISSUE_STATUSES, isOpenStatus, type BoardIssue, type IssueComment, type IssueDetail, type IssueStatus } from "../shared.js";
-import { TASK_COMMENTS_LIMIT, commentAuthor, commentBody, visibleComments } from "../task.js";
+import { ASSIGN_SEARCH_FROM, TASK_COMMENTS_LIMIT, assignCandidates, commentAuthor, commentBody, filterCandidates, isAssignedTo, visibleComments, type AssignTarget } from "../task.js";
 import { addIssueComment, getIssueDetail, listIssueComments, markIssueRead } from "./bridge.js";
 import { WaitNote, hrefFor } from "./card.js";
 import {
@@ -145,6 +145,7 @@ export function TaskModal({
   onClose,
   onOpen,
   onMove,
+  onAssign,
   onConfirm,
   onCommented,
 }: {
@@ -158,6 +159,8 @@ export function TaskModal({
   /** Pasa a otra tarea sin cerrar el modal (la tarea padre, una subtarea, un bloqueador). */
   onOpen: (issue: BoardIssue) => void;
   onMove: (issue: BoardIssue, to: IssueStatus) => void;
+  /** Reasigna (JST-429). Resuelve al terminar, con o sin error: el modal solo espera para no mandar dos a la vez. */
+  onAssign: (issue: BoardIssue, to: AssignTarget) => Promise<void>;
   onConfirm: (issue: BoardIssue) => void;
   /** Después de comentar: la tarea puede dejar de estar en «Te toca». */
   onCommented: (issue: BoardIssue) => void;
@@ -166,6 +169,8 @@ export function TaskModal({
   const bodyRef = useRef<HTMLDivElement>(null);
   const { thread, addComment, retry } = useThread(issue.id);
   const [statusMenu, setStatusMenu] = useState<HTMLElement | null>(null);
+  const [assignMenu, setAssignMenu] = useState<HTMLElement | null>(null);
+  const [assigning, setAssigning] = useState(false);
   const [allKids, setAllKids] = useState(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -181,6 +186,7 @@ export function TaskModal({
     bodyRef.current?.scrollTo({ top: 0 });
     setAllKids(false);
     setStatusMenu(null);
+    setAssignMenu(null);
   }, [issue.id]);
   // Esc cierra; si hay un menú abierto encima, ese Esc es del menú.
   useEffect(() => {
@@ -347,10 +353,20 @@ export function TaskModal({
               ) : null}
               <div className="gb-taskfield">
                 <span>{t("Responsable")}</span>
-                <b>
+                <button
+                  type="button"
+                  className={cx("gb-btn is-sm gb-taskstatus", assignMenu && "is-active")}
+                  aria-haspopup="menu"
+                  aria-expanded={assignMenu !== null}
+                  aria-label={t("Cambiar responsable")}
+                  aria-busy={assigning}
+                  disabled={assigning}
+                  onClick={(event) => setAssignMenu(assignMenu ? null : event.currentTarget)}
+                >
                   <Avatar name={who} size={18} />
-                  {who ?? t("Sin asignar")}
-                </b>
+                  <span className="gb-lbl">{who ?? t("Sin asignar")}</span>
+                  <Icon name="chevron-down" size={12} />
+                </button>
               </div>
               <div className="gb-taskfield">
                 <span>{t("Prioridad")}</span>
@@ -424,7 +440,75 @@ export function TaskModal({
           ))}
         </Popover>
       ) : null}
+      {assignMenu ? (
+        <AssignMenu
+          anchor={assignMenu}
+          index={index}
+          issue={issue}
+          userId={userId}
+          onClose={() => {
+            setAssignMenu(null);
+            assignMenu.focus();
+          }}
+          onPick={(target) => {
+            setAssignMenu(null);
+            assignMenu.focus();
+            if (isAssignedTo(issue, target) || assigning) return;
+            setAssigning(true);
+            void onAssign(issue, target).finally(() => setAssigning(false));
+          }}
+        />
+      ) : null}
     </Layer>
+  );
+}
+
+/** Menú de responsable (JST-429): «Yo», «Sin asignar» y los agentes de la empresa de la tarea; con búsqueda si son muchos. */
+function AssignMenu({
+  anchor,
+  index,
+  issue,
+  userId,
+  onClose,
+  onPick,
+}: {
+  anchor: HTMLElement;
+  index: BoardIndex;
+  issue: BoardIssue;
+  userId: string | null;
+  onClose: () => void;
+  onPick: (target: AssignTarget) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const candidates = useMemo(() => assignCandidates(index, issue), [index, issue.companyId, issue.assigneeAgentId]);
+  const visible = filterCandidates(candidates, search);
+  const row = (target: AssignTarget, key: string, name: string | null, label: string, note?: string) => {
+    const on = isAssignedTo(issue, target);
+    return (
+      <button key={key} type="button" className="gb-mi" role="menuitemradio" aria-checked={on} onClick={() => onPick(target)}>
+        <Avatar name={name} size={18} />
+        <span className="gb-lbl">{label}</span>
+        {note ? <span className="gb-muted">{note}</span> : null}
+        {on ? <Icon name="check" size={14} /> : null}
+      </button>
+    );
+  };
+  return (
+    <Popover anchor={anchor} width={240} align="end" label={t("Cambiar responsable")} onClose={onClose}>
+      <div className="gb-mh">{t("Cambiar responsable")}</div>
+      {candidates.length > ASSIGN_SEARCH_FROM ? (
+        <div className="gb-ms">
+          <Icon name="search" size={14} />
+          <input autoFocus value={search} placeholder={t("Buscar agente…")} aria-label={t("Buscar agente")} onChange={(event) => setSearch(event.target.value)} />
+        </div>
+      ) : null}
+      {userId ? row({ kind: "user", id: userId }, "yo", t("Yo"), t("Yo")) : null}
+      {row({ kind: "none" }, "none", null, t("Sin asignar"))}
+      <div className="gb-scroll">
+        {visible.map((agent) => row({ kind: "agent", id: agent.id }, agent.id, agent.name, agent.name, agent.paused ? t("en pausa") : undefined))}
+        {visible.length === 0 && search ? <div className="gb-mh">{t("Sin coincidencias")}</div> : null}
+      </div>
+    </Popover>
   );
 }
 

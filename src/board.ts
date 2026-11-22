@@ -323,7 +323,7 @@ export interface BoardIndex {
   kids: Map<string, BoardIssue[]>;
   companyById: Map<string, BoardCompany>;
   projectById: Map<string, { id: string; name: string; color: string | null; companyId: string }>;
-  agentById: Map<string, { id: string; name: string; companyId: string }>;
+  agentById: Map<string, { id: string; name: string; companyId: string; status?: string }>;
   waiting: Map<string, Waiting>;
   /** Tareas paradas (`blocker_attention`): no son «Te toca». Solo las usa la bandeja «Paradas». */
   stalled: Map<string, Stalled>;
