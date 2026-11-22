@@ -3,7 +3,7 @@
 // (Proyecto, Estado, Responsable, Prioridad, Etiqueta y Actualizada) con conteo
 // facetado. A la derecha, lo propio de cada vista: «Agrupar» en el Board y la
 // Lista; «Ocultar títulos» y «Ver cerrados» en Pedidos. Todo vive en la URL.
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import {
   GROUP_BY_OPTIONS,
   HOT_PRIORITIES,
@@ -27,6 +27,7 @@ import {
   type GroupBy,
   type LaneBy,
 } from "../board.js";
+import { StalledButton } from "./stalled.js";
 import { ISSUE_PRIORITIES, ISSUE_STATUSES, type IssuePriority, type IssueStatus } from "../shared.js";
 import { Avatar, CompanyTag, PRIORITY_LABELS, PriorityIcon, STATUS_LABELS, StatusIcon, companyClass, companyStyle, cx } from "./common.js";
 import { Icon, type IconName } from "./icons.js";
@@ -408,6 +409,7 @@ export function FilterBar({
   onQuery,
   onLanes,
   onFoldLanes,
+  stalled,
 }: {
   index: BoardIndex | null;
   query: BoardQuery;
@@ -416,6 +418,8 @@ export function FilterBar({
   /** Cambiar la agrupación del Board despliega todos los carriles y vuelve a 2 tarjetas por celda. */
   onLanes: (lanes: LaneBy | null) => void;
   onFoldLanes: (fold: boolean) => void;
+  /** Botón «⏸ N paradas» (JST-424); no se dibuja sin paradas. */
+  stalled?: { count: number; open: boolean; buttonRef: RefObject<HTMLButtonElement | null>; onToggle: () => void };
 }) {
   const { filters } = query;
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -526,6 +530,9 @@ export function FilterBar({
           <Icon name="chevron-down" size={14} />
         </button>
         <span className="gb-sp" />
+        {stalled && stalled.count > 0 && index?.tocaAvailable ? (
+          <StalledButton count={stalled.count} open={stalled.open} buttonRef={stalled.buttonRef} onToggle={stalled.onToggle} />
+        ) : null}
         {view === "lista" ? (
           <button
             type="button"

@@ -5,6 +5,7 @@ import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type DragE
 import {
   WAIT_LABELS,
   ancestorsOf,
+  blockedBy,
   childrenOf,
   dependentsOf,
   issueHref,
@@ -200,6 +201,39 @@ export function WaitNote({ index, issue, now, children }: { index: BoardIndex; i
           ) : null}
         </span>
         {children}
+      </div>
+    );
+  }
+  const stalled = index.stalled.get(issue.id);
+  if (stalled && isOpenStatus(issue.status)) {
+    // Parada (JST-424): no espera a nadie, así que no hay nada que responder.
+    const blocks = blockedBy(index, issue);
+    const shown = blocks.slice(0, 3);
+    const time = relativeTime(issue.updatedAt, now);
+    return (
+      <div className="gb-peek-toca is-stall">
+        <Icon name="circle-pause" size={14} />
+        <span>
+          <b>{t("Parada:")}</b> {t("nadie la mueve (sin agente, tarjeta ni aprobación). No espera tu respuesta.")}
+          <br />
+          {blocks.length > 0
+            ? tx("Bloquea {ids}", {
+                ids: (
+                  <>
+                    {shown.map((blocked, i) => (
+                      <span key={blocked.id}>
+                        {i > 0 ? ", " : ""}
+                        <b className="gb-mono">{blocked.identifier}</b>
+                      </span>
+                    ))}
+                    {blocks.length > shown.length ? ` ${t("y {n} más", { n: blocks.length - shown.length })}` : ""}
+                  </>
+                ),
+              })
+            : null}
+          {blocks.length > 0 && time ? " · " : null}
+          {time ? t("sin movimiento {time}", { time }) : null}
+        </span>
       </div>
     );
   }

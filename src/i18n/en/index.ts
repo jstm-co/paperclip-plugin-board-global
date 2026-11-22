@@ -7,8 +7,9 @@ import { create } from "./create.js";
 import { dashboard } from "./dashboard.js";
 import { filters } from "./filters.js";
 import { logic } from "./logic.js";
+import { stalled } from "./stalled.js";
 
 /** Las partes, por separado: la prueba del catálogo revisa que no se contradigan. */
-export const EN_PARTS: Readonly<Record<string, Readonly<Record<string, string>>>> = { core, logic, board, filters, create, dashboard };
+export const EN_PARTS: Readonly<Record<string, Readonly<Record<string, string>>>> = { core, logic, board, filters, create, dashboard, stalled };
 
 export const en: Readonly<Record<string, string>> = Object.assign({}, ...Object.values(EN_PARTS));

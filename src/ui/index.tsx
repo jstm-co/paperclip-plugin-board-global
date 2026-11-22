@@ -17,6 +17,8 @@ import {
   laneKeyOf,
   parseBoardQuery,
   serializeBoardQuery,
+  stalledCount,
+  stalledGroups,
   type BoardFilters,
   type BoardIndex,
   type BoardQuery,
@@ -33,6 +35,7 @@ import { Peek } from "./card.js";
 import { CreateProvider, MarksProvider, useCreateFlow, useMarks } from "./create.js";
 import { STATUS_LABELS, plural, useNow } from "./common.js";
 import { FilterBar } from "./filters.js";
+import { StalledDrawer, useStalledEscape } from "./stalled.js";
 import { tx } from "./i18n.js";
 import { Header } from "./header.js";
 import { BoardSkeleton, LaneBoard, badDropMessage, boardLanes, laneUiKey } from "./lanes.js";
@@ -327,6 +330,17 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
   );
   const closeTask = useCallback(() => setTaskId(null), []);
 
+  // Bandeja «Paradas» (JST-424): solo respeta el filtro de empresas; su estado no va en la URL.
+  const [stalledOpen, setStalledOpen] = useState(false);
+  const stalledBtn = useRef<HTMLButtonElement>(null);
+  const stalledList = useMemo(() => (index ? stalledGroups(index, query.filters.emp) : []), [index, query.filters.emp]);
+  const stalledTotal = stalledCount(stalledList);
+  const closeStalled = useCallback(() => {
+    setStalledOpen(false);
+    stalledBtn.current?.focus();
+  }, []);
+  useStalledEscape(stalledOpen, closeStalled);
+
   // Arrastrar y soltar: actualización optimista + PATCH nativo + toast con «Deshacer».
   const [dragging, setDragging] = useState<BoardIssue | null>(null);
   const onDragStart = useCallback((issue: BoardIssue) => setDragging(issue), []);
@@ -452,7 +466,9 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
       />
       {/* Desde el primer instante, también durante el esqueleto: la página no salta al llegar las vistas (§3.10). */}
       <ViewTabs index={index} query={query} now={now} saved={saved} onApply={onApplyView} toast={toast} />
-      <FilterBar index={index} query={query} disabled={loading || !index} onQuery={setQuery} onLanes={onLanes} onFoldLanes={onFoldLanes} />
+      <FilterBar index={index} query={query} disabled={loading || !index} onQuery={setQuery} onLanes={onLanes} onFoldLanes={onFoldLanes}
+        stalled={{ count: stalledTotal, open: stalledOpen, buttonRef: stalledBtn, onToggle: () => (stalledOpen ? closeStalled() : setStalledOpen(true)) }}
+      />
       {index && data.failed.length > 0 ? (
         <PartialErrorBanner failed={data.failed} onRetry={() => data.failed.forEach((load) => void data.retry(load.company.id))} />
       ) : null}
@@ -551,6 +567,7 @@ export function BoardGlobalPage({ context }: PluginPageProps) {
           onCommented={(issue) => void refreshCompany(issue.companyId)}
         />
       ) : null}
+      {index && stalledOpen ? <StalledDrawer index={index} groups={stalledList} now={now} onClose={closeStalled} /> : null}
       <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>
     </OpenTaskProvider>
