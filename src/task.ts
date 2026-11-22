@@ -1,6 +1,6 @@
 // Modal de tarea (JST-408): lo que no depende de React.
-import { userLabel, type BoardIndex } from "./board.js";
-import type { IssueComment } from "./shared.js";
+import { normalizeText, userLabel, type BoardIndex } from "./board.js";
+import type { BoardIssue, IssueComment } from "./shared.js";
 import { t } from "./i18n.js";
 
 /** Comentarios que el modal pide de una vez; los anteriores quedan en la página de la tarea. */
@@ -49,4 +49,61 @@ export function visibleComments(comments: readonly IssueComment[]): IssueComment
 export function commentBody(draft: string): string | null {
   const body = draft.trim();
   return body ? body : null;
+}
+
+// ---------------------------------------------------------------------------
+// Reasignar desde el modal (JST-429)
+// ---------------------------------------------------------------------------
+
+/** A quién queda la tarea: un agente, la persona de la sesión o nadie. */
+export type AssignTarget = { kind: "agent"; id: string } | { kind: "user"; id: string } | { kind: "none" };
+
+/** Con más agentes que esto el menú trae su campo de búsqueda (como los filtros, que lo ponen con más de 7 opciones). */
+export const ASSIGN_SEARCH_FROM = 8;
+
+/** Agentes que no se ofrecen: dados de baja o esperando aprobación. */
+const HIDDEN_AGENT_STATUSES = ["terminated", "pending_approval"];
+
+export interface AssignCandidate {
+  id: string;
+  name: string;
+  paused: boolean;
+}
+
+/** Cuerpo del PATCH: siempre manda los dos campos, para que el servidor quite al anterior. */
+export function assignBody(target: AssignTarget): { assigneeAgentId: string | null; assigneeUserId: string | null } {
+  if (target.kind === "agent") return { assigneeAgentId: target.id, assigneeUserId: null };
+  if (target.kind === "user") return { assigneeAgentId: null, assigneeUserId: target.id };
+  return { assigneeAgentId: null, assigneeUserId: null };
+}
+
+/** ¿La tarea ya está a cargo de ese destino? Entonces elegirlo no manda nada. */
+export function isAssignedTo(issue: Pick<BoardIssue, "assigneeAgentId" | "assigneeUserId">, target: AssignTarget): boolean {
+  if (target.kind === "agent") return issue.assigneeAgentId === target.id;
+  if (target.kind === "user") return !issue.assigneeAgentId && issue.assigneeUserId === target.id;
+  return !issue.assigneeAgentId && !issue.assigneeUserId;
+}
+
+/** La tarea con su nuevo responsable (la actualización al instante del tablero). */
+export function withAssignee<T extends Pick<BoardIssue, "assigneeAgentId" | "assigneeUserId">>(issue: T, target: AssignTarget): T {
+  return { ...issue, ...assignBody(target) };
+}
+
+/**
+ * Agentes de la empresa de la tarea, por nombre. Quedan fuera los terminados y los
+ * pendientes de aprobación, salvo el que ya tiene la tarea; sin `status` (la API no
+ * lo trajo) se ofrecen todos.
+ */
+export function assignCandidates(index: BoardIndex, issue: Pick<BoardIssue, "companyId" | "assigneeAgentId">): AssignCandidate[] {
+  return [...index.agentById.values()]
+    .filter((agent) => agent.companyId === issue.companyId)
+    .filter((agent) => agent.id === issue.assigneeAgentId || !agent.status || !HIDDEN_AGENT_STATUSES.includes(agent.status))
+    .map((agent) => ({ id: agent.id, name: agent.name, paused: agent.status === "paused" }))
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+}
+
+/** Filtra por nombre, sin acentos ni mayúsculas. Con la búsqueda vacía devuelve todos. */
+export function filterCandidates<T extends { name: string }>(candidates: readonly T[], search: string): T[] {
+  const q = normalizeText(search.trim());
+  return q ? candidates.filter((candidate) => normalizeText(candidate.name).includes(q)) : [...candidates];
 }

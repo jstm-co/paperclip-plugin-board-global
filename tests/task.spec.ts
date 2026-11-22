@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildBoardIndex } from "../src/board.js";
 import type { IssueComment } from "../src/shared.js";
-import { commentAuthor, commentBody, opensInPlace, visibleComments } from "../src/task.js";
+import { assignBody, assignCandidates, commentAuthor, commentBody, filterCandidates, isAssignedTo, opensInPlace, visibleComments, withAssignee } from "../src/task.js";
 
 const plain = { button: 0, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false };
 
@@ -48,5 +48,64 @@ describe("modal de tarea (JST-408)", () => {
   it("no envía comentarios vacíos y recorta los espacios", () => {
     expect(commentBody("   \n ")).toBeNull();
     expect(commentBody("  listo, sigue  \n")).toBe("listo, sigue");
+  });
+});
+
+describe("reasignar desde el modal (JST-429)", () => {
+  const agent = (id: string, name: string, companyId: string, status?: string) => ({ id, name, companyId, ...(status ? { status } : {}) });
+  const index = () => {
+    const idx = buildBoardIndex([]);
+    for (const a of [
+      agent("a-zeta", "Zeta", "betacorp", "active"),
+      agent("a-ana", "Álvaro", "betacorp", "paused"),
+      agent("a-baja", "Baja", "betacorp", "terminated"),
+      agent("a-pend", "Pendiente", "betacorp", "pending_approval"),
+      agent("a-sin", "Beto", "betacorp"),
+      agent("a-otro", "Otro", "el-molino", "active"),
+    ]) idx.agentById.set(a.id, a);
+    return idx;
+  };
+  const issue = (assigneeAgentId: string | null, assigneeUserId: string | null) => ({ companyId: "betacorp", assigneeAgentId, assigneeUserId });
+
+  it("ofrece solo los agentes de la empresa de la tarea, por nombre, sin terminados ni pendientes", () => {
+    const names = assignCandidates(index(), issue(null, null)).map((c) => c.name);
+    expect(names).toEqual(["Álvaro", "Beto", "Zeta"]);
+  });
+
+  it("marca los pausados y deja al terminado si ya tiene la tarea", () => {
+    const list = assignCandidates(index(), issue("a-baja", null));
+    expect(list.map((c) => c.name)).toEqual(["Álvaro", "Baja", "Beto", "Zeta"]);
+    expect(list.find((c) => c.id === "a-ana")?.paused).toBe(true);
+    expect(list.find((c) => c.id === "a-zeta")?.paused).toBe(false);
+  });
+
+  it("busca por nombre sin acentos ni mayúsculas", () => {
+    const list = assignCandidates(index(), issue(null, null));
+    expect(filterCandidates(list, " alvaro ").map((c) => c.name)).toEqual(["Álvaro"]);
+    expect(filterCandidates(list, "ZE").map((c) => c.name)).toEqual(["Zeta"]);
+    expect(filterCandidates(list, "").length).toBe(3);
+    expect(filterCandidates(list, "nadie")).toEqual([]);
+  });
+
+  it("el cuerpo del PATCH quita siempre al responsable anterior", () => {
+    expect(assignBody({ kind: "agent", id: "a-zeta" })).toEqual({ assigneeAgentId: "a-zeta", assigneeUserId: null });
+    expect(assignBody({ kind: "user", id: "u-1" })).toEqual({ assigneeAgentId: null, assigneeUserId: "u-1" });
+    expect(assignBody({ kind: "none" })).toEqual({ assigneeAgentId: null, assigneeUserId: null });
+  });
+
+  it("elegir al responsable actual no cambia nada", () => {
+    expect(isAssignedTo(issue("a-zeta", null), { kind: "agent", id: "a-zeta" })).toBe(true);
+    expect(isAssignedTo(issue("a-zeta", null), { kind: "agent", id: "a-ana" })).toBe(false);
+    expect(isAssignedTo(issue(null, "u-1"), { kind: "user", id: "u-1" })).toBe(true);
+    expect(isAssignedTo(issue("a-zeta", "u-1"), { kind: "user", id: "u-1" })).toBe(false);
+    expect(isAssignedTo(issue(null, null), { kind: "none" })).toBe(true);
+    expect(isAssignedTo(issue(null, "u-1"), { kind: "none" })).toBe(false);
+  });
+
+  it("aplica el cambio al instante y vuelve atrás con el responsable anterior", () => {
+    const before = issue("a-zeta", null);
+    const after = withAssignee(before, { kind: "user", id: "u-1" });
+    expect(after).toEqual({ companyId: "betacorp", assigneeAgentId: null, assigneeUserId: "u-1" });
+    expect(withAssignee(after, { kind: "agent", id: before.assigneeAgentId! })).toEqual(before);
   });
 });
