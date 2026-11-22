@@ -204,14 +204,12 @@ export function serializeBoardQuery(query: BoardQuery): string {
 // «Te toca»: tareas que esperan una respuesta del usuario (feed del Inbox)
 // ---------------------------------------------------------------------------
 
-export type WaitKind = "pregunta" | "confirmacion" | "aprobacion" | "desbloqueo" | "otro";
+export type WaitKind = "pregunta" | "confirmacion" | "aprobacion";
 
 export const WAIT_LABELS: Record<WaitKind, string> = {
   pregunta: t("Responder pregunta"),
   confirmacion: t("Confirmar"),
   aprobacion: t("Aprobar"),
-  desbloqueo: t("Desbloquear"),
-  otro: t("Atender"),
 };
 
 export interface Waiting {
@@ -223,10 +221,13 @@ export interface Waiting {
   href: string | null;
 }
 
-function waitKind(item: AttentionItem): WaitKind {
+/**
+ * Solo cuenta lo que espera una respuesta del usuario: una tarjeta del hilo,
+ * una aprobación, una revisión o una decisión. Cualquier otro ítem del feed
+ * (por ejemplo `blocker_attention`) devuelve `null` y no enciende «Te toca».
+ */
+function waitKind(item: AttentionItem): WaitKind | null {
   switch (item.sourceKind) {
-    case "blocker_attention":
-      return "desbloqueo";
     case "approval":
     case "review":
       return "aprobacion";
@@ -235,19 +236,11 @@ function waitKind(item: AttentionItem): WaitKind {
     case "issue_thread_interaction":
       return item.subject?.metadata?.kind === "ask_user_questions" ? "pregunta" : "confirmacion";
     default:
-      return "otro";
+      return null;
   }
 }
 
 function waitWhat(item: AttentionItem, kind: WaitKind): string {
-  if (kind === "desbloqueo") {
-    const blocked = item.detail?.blockedTaskCount ?? 0;
-    return blocked > 0
-      ? blocked === 1
-        ? t("Bloquea {n} tarea y necesita tu atención", { n: blocked })
-        : t("Bloquea {n} tareas y necesita tu atención", { n: blocked })
-      : t("Necesita tu atención para destrabarse");
-  }
   // Si el sujeto es la propia tarea, su título no dice qué se pide.
   const title = item.subject?.kind !== "issue" ? item.subject?.title?.trim() : "";
   return title || WAIT_LABELS[kind];
@@ -260,6 +253,7 @@ export function waitingFromAttention(items: readonly AttentionItem[]): Map<strin
     const issueId = item.relatedIssue?.id;
     if (!issueId || waiting.has(issueId)) continue;
     const kind = waitKind(item);
+    if (!kind) continue;
     waiting.set(issueId, {
       kind,
       what: waitWhat(item, kind),
@@ -268,6 +262,27 @@ export function waitingFromAttention(items: readonly AttentionItem[]): Map<strin
     });
   }
   return waiting;
+}
+
+/**
+ * Tarea parada: bloqueada sin nada vivo que la destrabe (`blocker_attention`).
+ * No espera al usuario, así que no entra en «Te toca». Se guarda aparte por si
+ * Diseño decide mostrarla; hoy no se pinta en ninguna vista.
+ */
+export interface Stalled {
+  /** Cuántas tareas bloquea. */
+  blockedTaskCount: number;
+  since: string | null;
+}
+
+export function stalledFromAttention(items: readonly AttentionItem[]): Map<string, Stalled> {
+  const stalled = new Map<string, Stalled>();
+  for (const item of items) {
+    const issueId = item.relatedIssue?.id;
+    if (item.sourceKind !== "blocker_attention" || !issueId || stalled.has(issueId)) continue;
+    stalled.set(issueId, { blockedTaskCount: item.detail?.blockedTaskCount ?? 0, since: item.createdAt ?? null });
+  }
+  return stalled;
 }
 
 // ---------------------------------------------------------------------------
@@ -310,6 +325,8 @@ export interface BoardIndex {
   projectById: Map<string, { id: string; name: string; color: string | null; companyId: string }>;
   agentById: Map<string, { id: string; name: string; companyId: string }>;
   waiting: Map<string, Waiting>;
+  /** Tareas paradas (`blocker_attention`): no son «Te toca». Sin uso en la interfaz por ahora. */
+  stalled: Map<string, Stalled>;
   /** Alguna empresa devolvió el feed del Inbox. Si no, «Te toca» no está disponible (§4.4). */
   tocaAvailable: boolean;
   /** Tareas recién creadas (JST-333): van primeras en su grupo hasta que se actualiza el board. */
@@ -345,6 +362,7 @@ export function buildBoardIndex(
     projectById: new Map(),
     agentById: new Map(),
     waiting: new Map(),
+    stalled: new Map(),
     tocaAvailable: boards.some((board) => board.attention !== null),
   };
   for (const board of sorted) {
@@ -364,6 +382,7 @@ export function buildBoardIndex(
       index.byId.set(issue.id, issue);
     }
     for (const [issueId, waiting] of waitingFromAttention(board.attention ?? [])) index.waiting.set(issueId, waiting);
+    for (const [issueId, stalled] of stalledFromAttention(board.attention ?? [])) index.stalled.set(issueId, stalled);
   }
   for (const issue of index.issues) {
     if (!issue.parentId || !index.byId.has(issue.parentId)) continue;
@@ -372,6 +391,7 @@ export function buildBoardIndex(
     else index.kids.set(issue.parentId, [issue]);
   }
   for (const issueId of [...index.waiting.keys()]) if (!index.byId.has(issueId)) index.waiting.delete(issueId);
+  for (const issueId of [...index.stalled.keys()]) if (!index.byId.has(issueId)) index.stalled.delete(issueId);
   return index;
 }
 

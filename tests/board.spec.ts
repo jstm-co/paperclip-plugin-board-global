@@ -39,6 +39,7 @@ import {
   treeRows,
   waitBlockerOf,
   visibleIssues,
+  stalledFromAttention,
   waitingFromAttention,
   withBlockedBy,
   type BoardFilters,
@@ -269,13 +270,48 @@ describe("«Te toca»", () => {
       interaction("t1", "ask_user_questions", "¿Qué hacemos con la app?"),
       interaction("t1", "request_confirmation", "Duplicado"),
       interaction("t2", "request_confirmation", "Aprobar la semana 3"),
-      { sourceKind: "blocker_attention", subject: { kind: "issue", title: "Título de la tarea" }, relatedIssue: { id: "t3" }, detail: { blockedTaskCount: 6 } },
+      { sourceKind: "approval", subject: { kind: "approval", title: "Aprobar el gasto" }, relatedIssue: { id: "t3" } },
+      { sourceKind: "decision", subject: { kind: "decision", title: "Elegir proveedor" }, relatedIssue: { id: "t4" } },
+      { sourceKind: "blocker_attention", subject: { kind: "issue", title: "Título de la tarea" }, relatedIssue: { id: "t5" }, detail: { blockedTaskCount: 6 } },
       { sourceKind: "budget_alert", subject: { kind: "company", title: "Presupuesto" } },
     ]);
-    expect([...waiting.keys()]).toEqual(["t1", "t2", "t3"]);
+    expect([...waiting.keys()]).toEqual(["t1", "t2", "t3", "t4"]);
     expect(waiting.get("t1")).toMatchObject({ kind: "pregunta", what: "¿Qué hacemos con la app?", href: "/X/issues/t1#interaction-1" });
     expect(waiting.get("t2")).toMatchObject({ kind: "confirmacion", what: "Aprobar la semana 3" });
-    expect(waiting.get("t3")).toMatchObject({ kind: "desbloqueo", what: "Bloquea 6 tareas y necesita tu atención", href: null });
+    expect(waiting.get("t3")).toMatchObject({ kind: "aprobacion", what: "Aprobar el gasto" });
+    expect(waiting.get("t4")).toMatchObject({ kind: "pregunta", what: "Elegir proveedor" });
+  });
+
+  it("un blocker_attention no es «Te toca»: va al mapa de paradas", () => {
+    const feed: AttentionItem[] = [
+      { sourceKind: "blocker_attention", subject: { kind: "issue", title: "Título de la tarea" }, relatedIssue: { id: "t5" }, detail: { blockedTaskCount: 6 }, createdAt: "2026-10-16T10:00:00.000Z" },
+      { sourceKind: "blocker_attention", subject: { kind: "issue", title: "Otra" }, relatedIssue: { id: "t6" } },
+    ];
+    expect(waitingFromAttention(feed).size).toBe(0);
+    expect([...stalledFromAttention(feed).entries()]).toEqual([
+      ["t5", { blockedTaskCount: 6, since: "2026-10-16T10:00:00.000Z" }],
+      ["t6", { blockedTaskCount: 0, since: null }],
+    ]);
+    // Si la misma tarea tiene además una tarjeta pendiente, esa sí cuenta aunque el bloqueo venga primero.
+    const both = [feed[0]!, interaction("t5", "request_confirmation", "Aprobar")];
+    expect(waitingFromAttention(both).get("t5")).toMatchObject({ kind: "confirmacion", what: "Aprobar" });
+    expect(stalledFromAttention(both).has("t5")).toBe(true);
+  });
+
+  it("en el índice, las paradas no encienden el distintivo, el filtro ni el contador", () => {
+    const withStall = buildBoardIndex(
+      boards.map((b) =>
+        b.companyId === "c-jst"
+          ? { ...b, attention: [...(b.attention ?? []), { sourceKind: "blocker_attention", relatedIssue: { id: "jst-1" }, detail: { blockedTaskCount: 3 } } as AttentionItem] }
+          : b,
+      ),
+    );
+    expect([...withStall.waiting.keys()]).toEqual(["jst-9"]);
+    expect([...withStall.stalled.keys()]).toEqual(["jst-1"]);
+    expect(filterIssues(withStall, filters({ toca: true })).map((i) => i.id)).toEqual(["jst-9"]);
+    // Una parada fuera del board se descarta, igual que «Te toca».
+    const orphan = buildBoardIndex(boards.map((b) => ({ ...b, attention: [{ sourceKind: "blocker_attention", relatedIssue: { id: "no-existe" } } as AttentionItem] })));
+    expect(orphan.stalled.size).toBe(0);
   });
 
   it("sigue la cadena de bloqueos hasta lo que espera tu respuesta", () => {

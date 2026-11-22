@@ -46,6 +46,17 @@ function asks(issueId: string): AttentionItem {
   };
 }
 
+/** Tarea bloqueada sin nada vivo: el Inbox la avisa, pero no espera nada del usuario. */
+function stalls(issueId: string): AttentionItem {
+  return {
+    sourceKind: "blocker_attention",
+    subject: { kind: "issue", title: `Tarea ${issueId}` },
+    relatedIssue: { id: issueId },
+    detail: { blockedTaskCount: 2 },
+    createdAt: "2026-10-16T10:00:00.000Z",
+  };
+}
+
 function run(id: string, issueId: string | null, status = "running"): LiveRun {
   return {
     id,
@@ -72,7 +83,7 @@ const boards: CompanyBoard[] = [
     elapsedMs: 1,
     projects: [{ id: "p-web", name: "Web", color: null }],
     agents: [{ id: "a-ing", name: "Ingeniera" }],
-    attention: [asks("mol-10"), asks("mol-98")],
+    attention: [asks("mol-10"), asks("mol-98"), stalls("mol-25"), stalls("mol-90"), stalls("mol-31")],
     issues: [
       // Pedido con tres niveles: MOL-1 > MOL-3 > MOL-4 > MOL-6.
       mol("mol-1", { status: "in_progress", title: "Tienda en línea", projectId: "p-web" }),
@@ -305,6 +316,18 @@ describe("qué pedidos se ven", () => {
 
   it("«Te toca» deja los pedidos donde alguna tarea espera tu respuesta", () => {
     expect(ids(pedidoRoots(index, query({}, { toca: true }), NOW))).toEqual(["mol-10", "mol-96"]);
+  });
+
+  it("un blocker_attention no enciende «Te toca» en el pedido, ni solo ni con otras tareas", () => {
+    expect([...index.stalled.keys()].sort()).toEqual(["mol-25", "mol-31", "mol-90"]);
+    expect(index.waiting.has("mol-25")).toBe(false);
+    expect(index.waiting.has("mol-90")).toBe(false);
+    expect(ids(pedidoRoots(index, query({}, { toca: true }), NOW))).not.toContain("mol-25");
+    expect(ids(pedidoRoots(index, query({}, { toca: true }), NOW))).not.toContain("mol-90");
+    expect(ids(pedidoRoots(index, query({}, { toca: true }), NOW))).not.toContain("mol-30");
+    for (const id of ["mol-25", "mol-30", "mol-90"]) expect(summarizePedido(index, index.byId.get(id)!).state).not.toBe("toca");
+    // Una tarjeta pendiente sí cuenta.
+    expect(summarizePedido(index, index.byId.get("mol-10")!).state).toBe("toca");
   });
 
   it("«Actualizada» cuenta el último movimiento de cualquier tarea del pedido", () => {
